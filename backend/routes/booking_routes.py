@@ -123,56 +123,52 @@ def verify_booking_otp(user):
     phone = (data.get('phone') or '').strip()
     request_id = (data.get('request_id') or '').strip()
 
+    # Prevent verification if no OTP request was created first
+    if not request_id:
+        return jsonify({
+            "status": "error",
+            "message": "No active OTP request found. Please click 'Send OTP' first."
+        }), 400
+
     if not submitted_otp:
         return jsonify({
             "status": "error",
             "message": "Please enter the 6-digit demonstration OTP code."
         }), 400
 
-    # Retrieve record: first by request_id, or by recent pending request for this user and phone
+    # Retrieve record by request_id
     record = None
     try:
-        if request_id:
-            record = query_one("""
-                SELECT * FROM otp_verifications 
-                WHERE request_id = %s;
-            """, (request_id,))
-        if not record and phone:
-            record = query_one("""
-                SELECT * FROM otp_verifications 
-                WHERE phone = %s AND user_id = %s AND status = 'pending'
-                ORDER BY verification_id DESC LIMIT 1;
-            """, (phone, user['user_id']))
+        record = query_one("""
+            SELECT * FROM otp_verifications 
+            WHERE request_id = %s;
+        """, (request_id,))
     except Exception as dbe:
         print(f"Notice: DB query otp_verifications error: {dbe}")
 
     # Memory store fallback if DB query returned nothing
     if not record and request_id in _otp_memory_store:
         record = _otp_memory_store[request_id]
-    elif not record and phone:
-        for req_k, mem_rec in _otp_memory_store.items():
-            if mem_rec.get('phone') == phone and mem_rec.get('user_id') == user['user_id'] and mem_rec.get('status') == 'pending':
-                record = mem_rec
-                break
-
-    # Session fallback for legacy clients
-    if not record:
-        sess_otp = session.get('booking_otp')
-        if sess_otp and sess_otp.get('user_id') == user['user_id']:
-            record = {
-                'request_id': sess_otp.get('request_id', 'sess_req'),
-                'phone': sess_otp.get('phone'),
-                'otp_code': sess_otp.get('code'),
-                'status': 'pending',
-                'attempts': 0,
-                'expires_at': sess_otp.get('expires_at', time.time() + 600)
-            }
 
     # If still no active verification request found
     if not record:
         return jsonify({
             "status": "error",
             "message": "No active OTP request found. Please click 'Send OTP' first."
+        }), 400
+
+    # Verify user ownership if user_id is set
+    if record.get('user_id') and record.get('user_id') != user['user_id']:
+        return jsonify({
+            "status": "error",
+            "message": "No active OTP request found. Please click 'Send OTP' first."
+        }), 400
+
+    # Verify phone match if provided
+    if phone and record.get('phone') and record.get('phone') != phone:
+        return jsonify({
+            "status": "error",
+            "message": "Mobile phone number does not match the active OTP request."
         }), 400
 
     rec_status = record.get('status', 'pending')
