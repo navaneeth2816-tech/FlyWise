@@ -1,5 +1,6 @@
 import json
 from datetime import datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor
 from flask import Blueprint, request, jsonify
 from database import query_all, query_one
 from services.flight_service import search_flights
@@ -9,7 +10,7 @@ simulation_bp = Blueprint('simulation', __name__, url_prefix='/api/v1/simulation
 @simulation_bp.route('/alternatives', methods=['POST'])
 def simulate_dates():
     """
-    What-If Simulator: compares alternative dates (-3 to +3 days).
+    What-If Simulator: compares alternative dates (-3 to +3 days) concurrently.
     PRD Section 14.
     """
     data = request.get_json() or {}
@@ -25,13 +26,10 @@ def simulate_dates():
         base_date_str = "2026-10-23"
 
     day_shifts = [-3, -2, -1, 0, 1, 2, 3]
-    timeline = []
 
-    for shift in day_shifts:
+    def evaluate_shift(shift):
         check_dt = base_dt + timedelta(days=shift)
         date_str = check_dt.strftime("%Y-%m-%d")
-        
-        # Search direct & connecting for this date in MySQL
         flights = []
         try:
             flights = search_flights(origin, destination, date_str, travel_class=travel_class, max_stops=1) or []
@@ -42,7 +40,7 @@ def simulate_dates():
         if flights:
             cheapest = min(flights, key=lambda x: x['total_fare'])
             fastest = min(flights, key=lambda x: x['duration_minutes'])
-            timeline.append({
+            return {
                 "date": date_str,
                 "day_name": check_dt.strftime("%a, %b %d"),
                 "shift_days": shift,
@@ -58,12 +56,11 @@ def simulate_dates():
                     "duration_minutes": cheapest['duration_minutes']
                 },
                 "fastest_duration_minutes": fastest['duration_minutes']
-            })
+            }
         else:
-            # Fallback realistic estimate when outside schedule window
             base_class_factor = 2.2 if travel_class == 'business' else 1.0
             est_fare = float(round((5200 + (abs(shift) * 250)) * base_class_factor))
-            timeline.append({
+            return {
                 "date": date_str,
                 "day_name": check_dt.strftime("%a, %b %d"),
                 "shift_days": shift,
@@ -73,7 +70,10 @@ def simulate_dates():
                 "lowest_fare": est_fare,
                 "cheapest_flight": None,
                 "fastest_duration_minutes": 165
-            })
+            }
+
+    with ThreadPoolExecutor(max_workers=7) as executor:
+        timeline = list(executor.map(evaluate_shift, day_shifts))
 
     # Compare baseline (shift 0) with other dates in timeline
     baseline_entry = next((t for t in timeline if t['shift_days'] == 0), None)
@@ -113,7 +113,7 @@ def simulate_dates():
 @simulation_bp.route('/airports', methods=['POST'])
 def simulate_airports():
     """
-    Smart Alternative-Airport Finder.
+    Smart Alternative-Airport Finder with concurrent nearby airport searches.
     PRD Section 15: Compares nearby airport options with ground transport costs and travel times.
     """
     data = request.get_json() or {}
@@ -131,17 +131,29 @@ def simulate_airports():
         term_info = json.loads(term_info)
     nearby = term_info.get('nearby_alternatives', [])
 
-    # Search original direct/connecting flights
-    primary_flights = search_flights(origin, destination, dep_date, max_stops=1)
-    primary_cheapest = min(primary_flights, key=lambda x: x['total_fare']) if primary_flights else None
+    # Search primary and alternative flights concurrently
+    def fetch_primary():
+        return search_flights(origin, destination, dep_date, max_stops=1)
 
+    def fetch_alt(alt):
+        alt_code = alt['airport']
+        flights = search_flights(alt_code, destination, dep_date, max_stops=1)
+        cheapest = min(flights, key=lambda x: x['total_fare']) if flights else None
+        return alt, cheapest
+
+    with ThreadPoolExecutor(max_workers=max(1, len(nearby) + 1)) as executor:
+        primary_future = executor.submit(fetch_primary)
+        alt_futures = [executor.submit(fetch_alt, alt) for alt in nearby]
+        
+        primary_flights = primary_future.result()
+        alt_results = [f.result() for f in alt_futures]
+
+    primary_cheapest = min(primary_flights, key=lambda x: x['total_fare']) if primary_flights else None
     alternatives_analysis = []
 
-    for alt in nearby:
-        alt_code = alt['airport']
-        alt_flights = search_flights(alt_code, destination, dep_date, max_stops=1)
-        if alt_flights:
-            alt_cheapest = min(alt_flights, key=lambda x: x['total_fare'])
+    for alt, alt_cheapest in alt_results:
+        if alt_cheapest:
+            alt_code = alt['airport']
             flight_fare = alt_cheapest['total_fare']
             cab_cost = alt.get('est_cab_inr', 2500)
             road_hrs = alt.get('road_hrs', 3.5)

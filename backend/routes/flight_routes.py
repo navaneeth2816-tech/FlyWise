@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from flask import Blueprint, request, jsonify
 from services.flight_service import search_flights, get_flight_seats, get_flight_status
 from services.recommendation_service import score_and_rank_itineraries
@@ -39,17 +40,44 @@ def search():
             "message": "Return date cannot be earlier than departure date."
         }), 400
 
-    itineraries = search_flights(
-        origin_code=origin,
-        destination_code=destination,
-        departure_date=departure_date,
-        travel_class=travel_class,
-        sort_by=sort_by if sort_by != 'recommendation' else 'price',
-        max_stops=max_stops,
-        max_price=max_price,
-        airline_filter=airline_filter,
-        departure_window=departure_window
-    )
+    def run_outbound():
+        return search_flights(
+            origin_code=origin,
+            destination_code=destination,
+            departure_date=departure_date,
+            travel_class=travel_class,
+            sort_by=sort_by if sort_by != 'recommendation' else 'price',
+            max_stops=max_stops,
+            max_price=max_price,
+            airline_filter=airline_filter,
+            departure_window=departure_window
+        )
+
+    def run_inbound():
+        if trip_type == 'roundtrip' and return_date:
+            return search_flights(
+                origin_code=destination,
+                destination_code=origin,
+                departure_date=return_date,
+                travel_class=travel_class,
+                sort_by=sort_by if sort_by != 'recommendation' else 'price',
+                max_stops=max_stops,
+                max_price=max_price,
+                airline_filter=airline_filter,
+                departure_window=departure_window
+            )
+        return []
+
+    # Run outbound and inbound searches concurrently if roundtrip
+    if trip_type == 'roundtrip' and return_date:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            f_out = pool.submit(run_outbound)
+            f_in = pool.submit(run_inbound)
+            itineraries = f_out.result()
+            ret_raw = f_in.result()
+    else:
+        itineraries = run_outbound()
+        ret_raw = []
 
     # Apply Personalized Recommendation Scoring
     user = get_current_user()
@@ -59,22 +87,7 @@ def search():
         user_prefs = {p['preference_type']: p['preference_value'] for p in prefs}
 
     scored = score_and_rank_itineraries(itineraries, user_prefs)
-
-    # Search inbound flights if round trip is requested
-    return_itineraries = []
-    if trip_type == 'roundtrip' and return_date:
-        ret_raw = search_flights(
-            origin_code=destination,
-            destination_code=origin,
-            departure_date=return_date,
-            travel_class=travel_class,
-            sort_by=sort_by if sort_by != 'recommendation' else 'price',
-            max_stops=max_stops,
-            max_price=max_price,
-            airline_filter=airline_filter,
-            departure_window=departure_window
-        )
-        return_itineraries = score_and_rank_itineraries(ret_raw, user_prefs)
+    return_itineraries = score_and_rank_itineraries(ret_raw, user_prefs) if ret_raw else []
 
     # Re-sort if user explicitly selected a sorting option
     if sort_by == 'price':

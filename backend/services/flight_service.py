@@ -44,21 +44,20 @@ def search_flights(origin_code, destination_code, departure_date, travel_class='
             (COALESCE(fa.base_fare, 4200.00) + COALESCE(fa.taxes, 500.00) + COALESCE(fa.mandatory_fees, 250.00)) AS total_fare,
             COALESCE(fa.currency, 'INR') AS currency,
             COALESCE(fa.fare_conditions, '{}') AS fare_conditions,
-            COUNT(CASE WHEN s.seat_status = 'available' THEN 1 END) AS available_seats
+            COALESCE((SELECT COUNT(*) FROM seats s WHERE s.flight_id = f.flight_id AND s.seat_status = 'available'), 12) AS available_seats
         FROM flights f
         JOIN airlines al ON f.airline_id = al.airline_id
         JOIN aircraft ac ON f.aircraft_id = ac.aircraft_id
         JOIN airports orig ON f.origin_airport_id = orig.airport_id
         JOIN airports dest ON f.destination_airport_id = dest.airport_id
         LEFT JOIN fares fa ON f.flight_id = fa.flight_id AND fa.travel_class = %s
-        LEFT JOIN seats s ON f.flight_id = s.flight_id
         WHERE orig.iata_code = %s
           AND dest.iata_code = %s
-          AND DATE(f.scheduled_departure) = %s
-        GROUP BY f.flight_id, fa.fare_id
+          AND f.scheduled_departure >= %s
+          AND f.scheduled_departure < DATE_ADD(%s, INTERVAL 1 DAY)
     """
     
-    direct_rows = query_all(direct_query, (travel_class, origin_code, destination_code, departure_date))
+    direct_rows = query_all(direct_query, (travel_class, origin_code, destination_code, departure_date, departure_date))
     itineraries = []
 
     for r in direct_rows:
@@ -146,12 +145,13 @@ def search_flights(origin_code, destination_code, departure_date, travel_class='
             LEFT JOIN fares fa2 ON f2.flight_id = fa2.flight_id AND fa2.travel_class = %s
             WHERE orig.iata_code = %s
               AND dest.iata_code = %s
-              AND DATE(f1.scheduled_departure) = %s
+              AND f1.scheduled_departure >= %s
+              AND f1.scheduled_departure < DATE_ADD(%s, INTERVAL 1 DAY)
               AND f2.scheduled_departure > f1.scheduled_arrival
               AND TIMESTAMPDIFF(MINUTE, f1.scheduled_arrival, f2.scheduled_departure) BETWEEN 50 AND 360
             LIMIT 15;
         """
-        conn_rows = query_all(connecting_query, (travel_class, travel_class, origin_code, destination_code, departure_date))
+        conn_rows = query_all(connecting_query, (travel_class, travel_class, origin_code, destination_code, departure_date, departure_date))
         for cr in conn_rows:
             tot_fare = cr['total_base_fare'] + cr['total_taxes'] + cr['total_fees']
             itinerary = {

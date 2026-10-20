@@ -11,6 +11,21 @@ const API_BASE = isLocal
   ? '/api/v1' 
   : 'https://flywise-0equ.onrender.com/api/v1';
 
+// Background warm-up ping for Render to eliminate cold-start lag before user actions
+if (typeof window !== 'undefined') {
+  try {
+    setTimeout(() => {
+      fetch(`${API_BASE}/health`, { method: 'GET', keepalive: true }).catch(() => {});
+    }, 100);
+  } catch (e) {
+    // Ignore warmup error
+  }
+}
+
+// In-memory cache for static endpoints (airports, baggage policies)
+const _staticCache = new Map();
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
 const api = {
   getToken() {
     return localStorage.getItem('flywise_token') || '';
@@ -74,7 +89,7 @@ const api = {
     }
   },
 
-  get(endpoint, params = {}) {
+  async get(endpoint, params = {}) {
     const cleanParams = {};
     for (const [k, v] of Object.entries(params)) {
       if (v !== undefined && v !== null && v !== '') {
@@ -83,7 +98,21 @@ const api = {
     }
     const query = new URLSearchParams(cleanParams).toString();
     const url = query ? `${endpoint}?${query}` : endpoint;
-    return this.request(url, { method: 'GET' });
+
+    // Cache static read-only endpoints (airports, baggage policies)
+    const isCacheable = (endpoint === '/airports' || endpoint === '/baggage/policies') && !query;
+    if (isCacheable && _staticCache.has(url)) {
+      const cached = _staticCache.get(url);
+      if (Date.now() - cached.timestamp < CACHE_TTL_MS) {
+        return cached.data;
+      }
+    }
+
+    const result = await this.request(url, { method: 'GET' });
+    if (isCacheable && result && result.status === 'success') {
+      _staticCache.set(url, { data: result, timestamp: Date.now() });
+    }
+    return result;
   },
 
   post(endpoint, body = {}) {

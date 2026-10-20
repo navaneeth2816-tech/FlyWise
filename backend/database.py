@@ -1,3 +1,5 @@
+import queue
+import threading
 import pymysql
 import pymysql.cursors
 from contextlib import contextmanager
@@ -27,7 +29,7 @@ def clean_row(row):
         return new_dict
     return row
 
-def get_connection():
+def _create_raw_connection():
     """Creates a raw MySQL connection."""
     kwargs = {
         'host': Config.DB_HOST,
@@ -38,26 +40,87 @@ def get_connection():
         'charset': 'utf8mb4',
         'cursorclass': pymysql.cursors.DictCursor,
         'autocommit': False,
-        'connect_timeout': 10
+        'connect_timeout': 8
     }
     if Config.DB_SSL:
         kwargs['ssl'] = {'ssl_mode': 'REQUIRED'}
     return pymysql.connect(**kwargs)
 
+class MySQLConnectionPool:
+    """Thread-safe connection pool for reusing database connections."""
+    def __init__(self, maxsize=15):
+        self.pool = queue.Queue(maxsize=maxsize)
+        self.maxsize = maxsize
+        self._lock = threading.Lock()
+
+    def acquire(self):
+        """Acquires a healthy connection from the pool or creates a new one."""
+        while not self.pool.empty():
+            try:
+                conn = self.pool.get_nowait()
+                if conn and conn.open:
+                    try:
+                        conn.ping()
+                        return conn
+                    except Exception:
+                        try:
+                            conn.close()
+                        except Exception:
+                            pass
+            except queue.Empty:
+                break
+        return _create_raw_connection()
+
+    def release(self, conn):
+        """Returns an active connection back to the pool."""
+        if not conn:
+            return
+        try:
+            if conn.open:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+                self.pool.put_nowait(conn)
+            else:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+        except queue.Full:
+            try:
+                conn.close()
+            except Exception:
+                pass
+        except Exception:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+_db_pool = MySQLConnectionPool(maxsize=15)
+
+def get_connection():
+    """Creates or acquires a MySQL connection."""
+    return _db_pool.acquire()
+
 @contextmanager
 def get_db_cursor(commit=False):
-    """Context manager for single operations or auto-commit queries."""
-    conn = get_connection()
+    """Context manager for single operations or auto-commit queries using connection pooling."""
+    conn = _db_pool.acquire()
     try:
         with conn.cursor() as cursor:
             yield cursor
         if commit:
             conn.commit()
     except Exception:
-        conn.rollback()
+        try:
+            conn.rollback()
+        except Exception:
+            pass
         raise
     finally:
-        conn.close()
+        _db_pool.release(conn)
 
 @contextmanager
 def transaction():
@@ -66,18 +129,22 @@ def transaction():
     Begins transaction, yields (conn, cursor).
     On successful block exit, commits changes.
     On exception, rolls back immediately.
+    Releases connection back to the pool.
     """
-    conn = get_connection()
+    conn = _db_pool.acquire()
     try:
         conn.begin()
         with conn.cursor() as cursor:
             yield cursor
         conn.commit()
     except Exception:
-        conn.rollback()
+        try:
+            conn.rollback()
+        except Exception:
+            pass
         raise
     finally:
-        conn.close()
+        _db_pool.release(conn)
 
 def query_all(query, params=None):
     """Executes SELECT and returns list of dicts."""

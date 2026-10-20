@@ -3,6 +3,7 @@ import time
 import json
 import re
 import requests
+import threading
 from datetime import datetime, timedelta
 from config import Config
 from database import query_all, query_one, execute_commit
@@ -234,15 +235,18 @@ def process_assistant_chat(user_message, user_id=None, conversation_id=None):
     status = "success"
     latency_ms = 0
 
-    # Models to attempt (deduplicated priority list)
+    # Models to attempt (fast low-latency priority list)
     models_to_try = []
-    for m in [Config.GEMINI_MODEL, "gemini-3-flash-preview", "gemini-3.1-flash-lite", "gemma-4-26b-a4b-it", "gemini-3.5-flash", "gemini-3.5-flash-lite"]:
+    primary_model = Config.GEMINI_MODEL or "gemini-3.1-flash-lite-preview"
+    for m in [primary_model, "gemma-4-26b-a4b-it"]:
         if m and m not in models_to_try:
             models_to_try.append(m)
 
     model_used = None
     if Config.GEMINI_API_KEY:
-        for model_name in models_to_try:
+        for idx, model_name in enumerate(models_to_try):
+            # Strict short timeouts: 3.0s for primary, 2.0s for secondary to guarantee fast response
+            req_timeout = 3.0 if idx == 0 else 2.0
             try:
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={Config.GEMINI_API_KEY}"
                 payload = {
@@ -252,10 +256,10 @@ def process_assistant_chat(user_message, user_id=None, conversation_id=None):
                     "contents": contents_payload,
                     "generationConfig": {
                         "temperature": 0.4,
-                        "maxOutputTokens": 1000
+                        "maxOutputTokens": 800
                     }
                 }
-                resp = requests.post(url, json=payload, timeout=8)
+                resp = requests.post(url, json=payload, timeout=req_timeout)
                 latency_ms = int((time.time() - start_time) * 1000)
 
                 if resp.status_code == 200:
@@ -267,17 +271,21 @@ def process_assistant_chat(user_message, user_id=None, conversation_id=None):
                             model_used = model_name
                             status = "success"
                             break
+                elif resp.status_code == 429:
+                    print(f"Gemini API ({model_name}) quota limit (429); skipping to fast fallback.")
+                    status = "http_429"
+                    break # Don't burn time retrying when key quota is reached
                 else:
-                    print(f"Gemini API ({model_name}) status {resp.status_code}: {resp.text[:120]}")
+                    print(f"Gemini API ({model_name}) status {resp.status_code}")
                     status = f"http_{resp.status_code}"
             except Exception as e:
-                print(f"Gemini API ({model_name}) error: {e}")
-                status = "error"
+                print(f"Gemini API ({model_name}) timed out/error ({e}); falling back immediately.")
+                status = "timeout"
                 latency_ms = int((time.time() - start_time) * 1000)
     else:
         print("Notice: GEMINI_API_KEY not configured; using intelligent grounded fallback.")
 
-    # Intelligent Grounded Fallback if API was unavailable or rate-limited
+    # Intelligent Grounded Fallback if API was unavailable, slow, or rate-limited
     if not assistant_reply:
         if grounded_itineraries:
             top = grounded_itineraries[0]
@@ -296,18 +304,21 @@ Review the flight cards below to book your seat or compare complete cost breakdo
         else:
             assistant_reply = "I am ready to help you! You can ask me any general knowledge questions or travel queries — for example: *'Find flights from Tirupati to Delhi under ₹7,000'*, *'What are the baggage rules for Air India?'*, or *'What is the connection risk at Mumbai Airport?'*"
 
-    # Store assistant reply in DB
-    try:
-        execute_commit("""
-            INSERT INTO ai_messages (conversation_id, sender_type, message_content, metadata)
-            VALUES (%s, 'assistant', %s, %s);
-        """, (conversation_id, assistant_reply, json.dumps({"flight_count": len(grounded_itineraries), "status": status})))
-        execute_commit("""
-            INSERT INTO ai_usage_logs (user_id, model_identifier, request_type, latency_ms, request_status)
-            VALUES (%s, %s, 'assistant_chat', %s, %s);
-        """, (user_id, model_used or Config.GEMINI_MODEL, latency_ms, status))
-    except Exception as dbe:
-        print(f"Notice: Assistant message insert skipped: {dbe}")
+    # Store assistant reply in DB asynchronously in background to eliminate client wait time
+    def _persist_log():
+        try:
+            execute_commit("""
+                INSERT INTO ai_messages (conversation_id, sender_type, message_content, metadata)
+                VALUES (%s, 'assistant', %s, %s);
+            """, (conversation_id, assistant_reply, json.dumps({"flight_count": len(grounded_itineraries), "status": status})))
+            execute_commit("""
+                INSERT INTO ai_usage_logs (user_id, model_identifier, request_type, latency_ms, request_status)
+                VALUES (%s, %s, 'assistant_chat', %s, %s);
+            """, (user_id, model_used or Config.GEMINI_MODEL, latency_ms, status))
+        except Exception as dbe:
+            print(f"Notice: Background log error: {dbe}")
+
+    threading.Thread(target=_persist_log, daemon=True).start()
 
     return {
         "conversation_id": conversation_id,
