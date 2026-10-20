@@ -35,6 +35,15 @@ function setupEventListeners() {
   if (chatForm) {
     chatForm.addEventListener('submit', handleAssistantSubmit);
   }
+  const chatInput = document.getElementById('ai-chat-input');
+  if (chatInput) {
+    chatInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleAssistantSubmit(e);
+      }
+    });
+  }
 
   // Auth forms
   const loginForm = document.getElementById('login-form');

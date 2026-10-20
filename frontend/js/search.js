@@ -4,6 +4,12 @@
 
 let currentSearchResults = [];
 let selectedForCompare = [];
+let lastSearchCriteria = {
+  origin: 'TIR',
+  destination: 'DEL',
+  date: '2026-10-23',
+  travelClass: 'economy'
+};
 
 async function performFlightSearch(e) {
   if (e) e.preventDefault();
@@ -18,6 +24,14 @@ async function performFlightSearch(e) {
     showToast('Please specify Origin, Destination and Departure Date.', 'warning');
     return;
   }
+
+  // Preserve the search criteria for What-If Simulator and tools
+  lastSearchCriteria = {
+    origin,
+    destination,
+    date,
+    travelClass
+  };
 
   const container = document.getElementById('flight-results-container');
   if (container) {
@@ -56,6 +70,41 @@ async function performFlightSearch(e) {
     }
   }
 }
+
+function openWhatIfSimulator() {
+  const origin = (lastSearchCriteria && lastSearchCriteria.origin) || document.getElementById('search-origin')?.value || 'TIR';
+  const destination = (lastSearchCriteria && lastSearchCriteria.destination) || document.getElementById('search-destination')?.value || 'DEL';
+  const date = (lastSearchCriteria && lastSearchCriteria.date) || document.getElementById('search-date')?.value || '2026-10-23';
+  const travelClass = (lastSearchCriteria && lastSearchCriteria.travelClass) || document.getElementById('search-class')?.value || 'economy';
+
+  // Navigate to tools view
+  if (typeof switchView === 'function') {
+    switchView('tools-view');
+  }
+
+  // Activate What-If tab
+  const whatifTabBtn = document.querySelector('#tools-view button[onclick*="whatif-tab"]');
+  if (typeof switchToolTab === 'function') {
+    switchToolTab('whatif-tab', whatifTabBtn);
+  }
+
+  // Populate simulator fields with user's search criteria
+  const origInput = document.getElementById('whatif-origin');
+  const destInput = document.getElementById('whatif-destination');
+  const dateInput = document.getElementById('whatif-date');
+  const classInput = document.getElementById('whatif-class');
+
+  if (origInput) origInput.value = origin;
+  if (destInput) destInput.value = destination;
+  if (dateInput) dateInput.value = date;
+  if (classInput) classInput.value = travelClass;
+
+  // Run the simulation automatically
+  if (typeof runWhatIfSimulator === 'function') {
+    runWhatIfSimulator();
+  }
+}
+window.openWhatIfSimulator = openWhatIfSimulator;
 
 function renderSearchResults(itineraries) {
   const container = document.getElementById('flight-results-container');

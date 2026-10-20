@@ -76,7 +76,8 @@ async function handleAssistantSubmit(e) {
     appendChatMessage('assistant', data.reply, data.itineraries);
   } catch (err) {
     removeTypingIndicator(typingId);
-    appendChatMessage('assistant', `I encountered a connection error. Please try again or ask another question.`);
+    console.warn('AI Assistant query error:', err);
+    appendChatMessage('assistant', `I could not complete your request at this moment (${err.message || 'Connection issue'}). Please try again or ask another question.`);
   } finally {
     isAiResponding = false;
     if (input) {

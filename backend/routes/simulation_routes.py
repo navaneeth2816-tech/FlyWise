@@ -16,11 +16,13 @@ def simulate_dates():
     origin = data.get('origin', 'TIR').strip().upper()
     destination = data.get('destination', 'DEL').strip().upper()
     base_date_str = data.get('departure_date', '2026-10-23').strip()
+    travel_class = (data.get('travel_class') or data.get('class') or 'economy').strip().lower()
 
     try:
         base_dt = datetime.strptime(base_date_str, "%Y-%m-%d")
     except Exception:
         base_dt = datetime(2026, 10, 23)
+        base_date_str = "2026-10-23"
 
     day_shifts = [-3, -2, -1, 0, 1, 2, 3]
     timeline = []
@@ -29,8 +31,14 @@ def simulate_dates():
         check_dt = base_dt + timedelta(days=shift)
         date_str = check_dt.strftime("%Y-%m-%d")
         
-        # Search direct & connecting for this date
-        flights = search_flights(origin, destination, date_str, max_stops=1)
+        # Search direct & connecting for this date in MySQL
+        flights = []
+        try:
+            flights = search_flights(origin, destination, date_str, travel_class=travel_class, max_stops=1) or []
+        except Exception as fe:
+            print(f"Simulation search_flights error for {date_str}: {fe}")
+            flights = []
+
         if flights:
             cheapest = min(flights, key=lambda x: x['total_fare'])
             fastest = min(flights, key=lambda x: x['duration_minutes'])
@@ -39,7 +47,9 @@ def simulate_dates():
                 "day_name": check_dt.strftime("%a, %b %d"),
                 "shift_days": shift,
                 "flight_count": len(flights),
-                "lowest_fare": cheapest['total_fare'],
+                "is_live_schedule": True,
+                "price_type": "live_schedule",
+                "lowest_fare": float(cheapest['total_fare']),
                 "cheapest_flight": {
                     "airline": cheapest['airline_name'],
                     "flight_number": cheapest['segments'][0]['flight_number'],
@@ -50,38 +60,53 @@ def simulate_dates():
                 "fastest_duration_minutes": fastest['duration_minutes']
             })
         else:
-            # Fallback realistic estimate if outside scheduled window
-            est_fare = 5200 + (abs(shift) * 200)
+            # Fallback realistic estimate when outside schedule window
+            base_class_factor = 2.2 if travel_class == 'business' else 1.0
+            est_fare = float(round((5200 + (abs(shift) * 250)) * base_class_factor))
             timeline.append({
                 "date": date_str,
                 "day_name": check_dt.strftime("%a, %b %d"),
                 "shift_days": shift,
                 "flight_count": 0,
+                "is_live_schedule": False,
+                "price_type": "estimated_trend",
                 "lowest_fare": est_fare,
                 "cheapest_flight": None,
                 "fastest_duration_minutes": 165
             })
 
-    # Compare baseline (shift 0) with lowest in timeline
-    baseline_fare = next((t['lowest_fare'] for t in timeline if t['shift_days'] == 0), 5800)
+    # Compare baseline (shift 0) with other dates in timeline
+    baseline_entry = next((t for t in timeline if t['shift_days'] == 0), None)
+    baseline_fare = baseline_entry['lowest_fare'] if baseline_entry else 5800.0
+
+    # Calculate exact fare difference for each date
+    for t in timeline:
+        t['fare_difference'] = float(t['lowest_fare'] - baseline_fare)
+
     best_option = min(timeline, key=lambda x: x['lowest_fare'])
-    savings = baseline_fare - best_option['lowest_fare']
+    savings = float(baseline_fare - best_option['lowest_fare'])
 
     insights = []
     if savings > 0 and best_option['shift_days'] != 0:
-        insights.append(f"Travelling on {best_option['day_name']} ({best_option['shift_days']} days difference) saves ₹{savings:,.0f} in flight fares.")
+        dir_label = f"{abs(best_option['shift_days'])} days earlier" if best_option['shift_days'] < 0 else f"{best_option['shift_days']} days later"
+        insights.append(f"Travelling on {best_option['day_name']} ({dir_label}) can save ~₹{savings:,.0f} compared to {base_date_str}.")
+    elif any(t['flight_count'] > 0 for t in timeline):
+        live_options = [t for t in timeline if t['flight_count'] > 0]
+        insights.append(f"Found active scheduled flights on {len(live_options)} alternate dates around your selection.")
     else:
-        insights.append("Your chosen departure date offers the best available fare rate for this week.")
+        insights.append("Historical price trends indicate weekday departures (Tue-Thu) typically offer lower fares on this route.")
 
     return jsonify({
         "status": "success",
         "origin": origin,
         "destination": destination,
         "base_date": base_date_str,
+        "travel_class": travel_class,
         "baseline_fare": baseline_fare,
-        "max_savings_inr": max(0, savings),
+        "max_savings_inr": max(0.0, savings),
         "best_date": best_option['date'],
         "timeline": timeline,
+        "alternatives": timeline,
         "insights": insights
     })
 

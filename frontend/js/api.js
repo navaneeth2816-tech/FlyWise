@@ -1,7 +1,15 @@
 /**
  * FlyWise AI - Unified API Client & State Management
  */
-const API_BASE = 'https://flywise-0equ.onrender.com';
+// Automatically detect environment: local dev uses local Flask backend, production uses deployed Render backend
+const isLocal = typeof window !== 'undefined' && 
+  (window.location.hostname === 'localhost' || 
+   window.location.hostname === '127.0.0.1' || 
+   window.location.hostname === '');
+
+const API_BASE = isLocal 
+  ? '/api/v1' 
+  : 'https://flywise-0equ.onrender.com/api/v1';
 
 const api = {
   getToken() {
@@ -44,7 +52,10 @@ const api = {
     };
 
     try {
-      const response = await fetch(`${API_BASE}${endpoint}`, config);
+      const cleanEndpoint = endpoint.startsWith('/api/v1') 
+        ? endpoint.replace('/api/v1', '') 
+        : endpoint;
+      const response = await fetch(`${API_BASE}${cleanEndpoint}`, config);
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {

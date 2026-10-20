@@ -72,7 +72,7 @@
       <!-- Hero Banner -->
       <div class="hero">
         <div class="hero-tag">
-          <i class="fa-solid fa-sparkles"></i> AI-Powered Travel Decisions Grounded in MySQL
+          <i class="fa-solid fa-sparkles"></i> AI-Powered Travel Decisions for Smarter Journeys
         </div>
         <h1>Book Smarter. Travel Safer.<br>Stay Ahead.</h1>
         <p>
@@ -391,7 +391,7 @@
             Evaluate how shifting your travel date by ±1 to 3 days affects total journey cost, schedule options, and potential savings.
           </p>
 
-          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 1rem; align-items: end; margin-bottom: 1.5rem;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr auto; gap: 1rem; align-items: end; margin-bottom: 1.5rem;">
             <div class="form-group">
               <label>Origin</label>
               <input type="text" id="whatif-origin" value="TIR" style="padding: 0.65rem; border: 1px solid var(--border); border-radius: 8px;">
@@ -403,6 +403,13 @@
             <div class="form-group">
               <label>Baseline Date</label>
               <input type="date" id="whatif-date" value="2026-10-23" style="padding: 0.65rem; border: 1px solid var(--border); border-radius: 8px;">
+            </div>
+            <div class="form-group">
+              <label>Travel Class</label>
+              <select id="whatif-class" style="padding: 0.65rem; border: 1px solid var(--border); border-radius: 8px; width: 100%;">
+                <option value="economy" selected>Economy</option>
+                <option value="business">Business</option>
+              </select>
             </div>
             <button class="btn-search" onclick="runWhatIfSimulator()">
               Simulate Dates
