@@ -1,7 +1,7 @@
 /**
  * FlyWise AI - Unified API Client & State Management
  */
-const API_BASE = '/api/v1';
+const API_BASE = 'https://flywise-2edu.onrender.com/api/v1';
 
 const api = {
   getToken() {
