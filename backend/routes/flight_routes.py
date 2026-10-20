@@ -11,8 +11,11 @@ def search():
     origin = request.args.get('origin', '').strip().upper()
     destination = request.args.get('destination', '').strip().upper()
     departure_date = request.args.get('date', '').strip()
+    return_date = request.args.get('return_date', '').strip()
+    trip_type = request.args.get('trip_type', 'oneway').strip().lower()
     travel_class = request.args.get('class', 'economy').strip().lower()
     sort_by = request.args.get('sort_by', 'recommendation').strip()
+    passengers = int(request.args.get('passengers', 1) or 1)
     max_stops = int(request.args.get('stops', 1))
     max_price = request.args.get('max_price')
     airline_filter = request.args.get('airline')
@@ -22,6 +25,18 @@ def search():
         return jsonify({
             "status": "error",
             "message": "Origin, destination, and departure date are required query parameters."
+        }), 400
+
+    if origin == destination:
+        return jsonify({
+            "status": "error",
+            "message": "Departure and destination cannot be the same airport. Please select different cities."
+        }), 400
+
+    if trip_type == 'roundtrip' and return_date and return_date < departure_date:
+        return jsonify({
+            "status": "error",
+            "message": "Return date cannot be earlier than departure date."
         }), 400
 
     itineraries = search_flights(
@@ -45,6 +60,22 @@ def search():
 
     scored = score_and_rank_itineraries(itineraries, user_prefs)
 
+    # Search inbound flights if round trip is requested
+    return_itineraries = []
+    if trip_type == 'roundtrip' and return_date:
+        ret_raw = search_flights(
+            origin_code=destination,
+            destination_code=origin,
+            departure_date=return_date,
+            travel_class=travel_class,
+            sort_by=sort_by if sort_by != 'recommendation' else 'price',
+            max_stops=max_stops,
+            max_price=max_price,
+            airline_filter=airline_filter,
+            departure_window=departure_window
+        )
+        return_itineraries = score_and_rank_itineraries(ret_raw, user_prefs)
+
     # Re-sort if user explicitly selected a sorting option
     if sort_by == 'price':
         scored.sort(key=lambda x: x['total_fare'])
@@ -63,11 +94,16 @@ def search():
             "origin": origin,
             "destination": destination,
             "departure_date": departure_date,
+            "return_date": return_date if trip_type == 'roundtrip' else None,
+            "trip_type": trip_type,
+            "passengers": passengers,
             "travel_class": travel_class,
             "sort_by": sort_by
         },
         "count": len(scored),
-        "itineraries": scored
+        "itineraries": scored,
+        "return_count": len(return_itineraries),
+        "return_itineraries": return_itineraries
     })
 
 @flight_bp.route('/<int:flight_id>', methods=['GET'])

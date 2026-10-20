@@ -52,9 +52,12 @@ const api = {
     };
 
     try {
-      const cleanEndpoint = endpoint.startsWith('/api/v1') 
-        ? endpoint.replace('/api/v1', '') 
+      let cleanEndpoint = endpoint.startsWith('/api/v1') 
+        ? endpoint.slice(7) 
         : endpoint;
+      if (!cleanEndpoint.startsWith('/')) {
+        cleanEndpoint = '/' + cleanEndpoint;
+      }
       const response = await fetch(`${API_BASE}${cleanEndpoint}`, config);
       const data = await response.json().catch(() => ({}));
 
@@ -64,12 +67,21 @@ const api = {
       return data;
     } catch (error) {
       console.error(`API Error [${endpoint}]:`, error);
+      if (error instanceof TypeError && (error.message.includes('fetch') || error.message.includes('NetworkError'))) {
+        throw new Error('Unable to reach FlyWise servers. Please verify your connection or try again in a moment.');
+      }
       throw error;
     }
   },
 
   get(endpoint, params = {}) {
-    const query = new URLSearchParams(params).toString();
+    const cleanParams = {};
+    for (const [k, v] of Object.entries(params)) {
+      if (v !== undefined && v !== null && v !== '') {
+        cleanParams[k] = v;
+      }
+    }
+    const query = new URLSearchParams(cleanParams).toString();
     const url = query ? `${endpoint}?${query}` : endpoint;
     return this.request(url, { method: 'GET' });
   },

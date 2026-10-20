@@ -572,7 +572,7 @@ button, input, select, textarea {
 
 .search-grid {
   display: grid;
-  grid-template-columns: 1.3fr 1.3fr 1fr 1fr 1.2fr auto;
+  grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)) auto;
   gap: 0.85rem;
   align-items: end;
 }

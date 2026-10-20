@@ -102,5 +102,63 @@ class TestFixesVerification(unittest.TestCase):
         self.assertEqual(data.get("status"), "healthy")
         self.assertTrue(data.get("database_connected"))
 
+    def test_07_flight_search_validations_and_results(self):
+        """Verify flight search route rejects same origin/dest and invalid dates, and returns matching flights."""
+        # Same origin & destination
+        r_same = self.client.get('/api/v1/flights/search?origin=DEL&destination=DEL&date=2026-10-23')
+        self.assertEqual(r_same.status_code, 400)
+        self.assertIn("cannot be the same", r_same.get_json().get("message", "").lower())
+
+        # Missing parameters
+        r_miss = self.client.get('/api/v1/flights/search?origin=DEL')
+        self.assertEqual(r_miss.status_code, 400)
+
+        # Return date earlier than departure date
+        r_ret = self.client.get('/api/v1/flights/search?origin=TIR&destination=DEL&date=2026-10-23&trip_type=roundtrip&return_date=2026-10-20')
+        self.assertEqual(r_ret.status_code, 400)
+        self.assertIn("cannot be earlier", r_ret.get_json().get("message", "").lower())
+
+        # Valid flight search (TIR to DEL on 2026-10-23)
+        r_ok = self.client.get('/api/v1/flights/search?origin=TIR&destination=DEL&date=2026-10-23&passengers=2')
+        self.assertEqual(r_ok.status_code, 200)
+        d_ok = r_ok.get_json()
+        self.assertEqual(d_ok.get("status"), "success")
+        self.assertTrue(d_ok.get("count", 0) > 0)
+        self.assertEqual(d_ok["search_parameters"]["passengers"], 2)
+
+        # Empty flight search (date with no scheduled flights)
+        r_empty = self.client.get('/api/v1/flights/search?origin=TIR&destination=DEL&date=2027-01-01')
+        self.assertEqual(r_empty.status_code, 200)
+        d_empty = r_empty.get_json()
+        self.assertEqual(d_empty.get("count"), 0)
+        self.assertEqual(d_empty.get("itineraries"), [])
+
+    def test_08_search_flights_button_and_frontend_components(self):
+        """Verify search flights button has onclick handler, return date group, passengers, and validation elements."""
+        html_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../frontend/index.html'))
+        with open(html_path, 'r', encoding='utf-8') as f:
+            html = f.read()
+
+        # Search Flights button with ID and onclick
+        self.assertIn('id="btn-search-flights"', html)
+        self.assertIn('onclick="performFlightSearch(event)"', html)
+        self.assertIn('Search Flights', html)
+
+        # Return date and Passengers form groups
+        self.assertIn('id="search-return-date-group"', html)
+        self.assertIn('id="search-return-date"', html)
+        self.assertIn('id="search-passengers"', html)
+        self.assertIn('id="search-validation-msg"', html)
+
+        # JS exports
+        search_js_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../frontend/js/search.js'))
+        with open(search_js_path, 'r', encoding='utf-8') as f:
+            js = f.read()
+
+        self.assertIn('window.performFlightSearch = performFlightSearch', js)
+        self.assertIn('window.toggleTripType = toggleTripType', js)
+        self.assertIn('showSearchValidationError', js)
+        self.assertIn('isSearchingFlights', js)
+
 if __name__ == '__main__':
     unittest.main()

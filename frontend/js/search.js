@@ -4,24 +4,140 @@
 
 let currentSearchResults = [];
 let selectedForCompare = [];
+let isSearchingFlights = false;
 let lastSearchCriteria = {
   origin: 'TIR',
   destination: 'DEL',
   date: '2026-10-23',
+  returnDate: '2026-10-26',
+  tripType: 'oneway',
+  passengers: 1,
   travelClass: 'economy'
 };
 
+function toggleTripType(type) {
+  const returnGroup = document.getElementById('search-return-date-group');
+  const returnInput = document.getElementById('search-return-date');
+  const depInput = document.getElementById('search-date');
+  if (!returnGroup) return;
+
+  if (type === 'roundtrip') {
+    returnGroup.style.display = 'flex';
+    if (returnInput && depInput && depInput.value) {
+      const depDate = new Date(depInput.value);
+      if (!isNaN(depDate.getTime())) {
+        depDate.setDate(depDate.getDate() + 3);
+        const yyyy = depDate.getFullYear();
+        const mm = String(depDate.getMonth() + 1).padStart(2, '0');
+        const dd = String(depDate.getDate()).padStart(2, '0');
+        returnInput.value = `${yyyy}-${mm}-${dd}`;
+        returnInput.min = depInput.value;
+      }
+    }
+  } else {
+    returnGroup.style.display = 'none';
+  }
+}
+window.toggleTripType = toggleTripType;
+
+function showSearchValidationError(message, fieldElement) {
+  const msgContainer = document.getElementById('search-validation-msg');
+  const msgText = document.getElementById('search-validation-msg-text');
+  if (msgContainer && msgText) {
+    msgText.textContent = message;
+    msgContainer.style.display = 'flex';
+  }
+  showToast(message, 'warning');
+  if (fieldElement) {
+    fieldElement.style.borderColor = 'var(--danger)';
+    fieldElement.focus();
+  }
+}
+
+function clearSearchValidationError() {
+  const msgContainer = document.getElementById('search-validation-msg');
+  if (msgContainer) {
+    msgContainer.style.display = 'none';
+  }
+  ['search-origin', 'search-destination', 'search-date', 'search-return-date', 'search-passengers'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.borderColor = '';
+  });
+}
+
 async function performFlightSearch(e) {
-  if (e) e.preventDefault();
+  if (e && e.preventDefault) e.preventDefault();
+  if (isSearchingFlights) return;
 
-  const origin = document.getElementById('search-origin').value.trim();
-  const destination = document.getElementById('search-destination').value.trim();
-  const date = document.getElementById('search-date').value;
-  const travelClass = document.getElementById('search-class').value;
-  const sortBy = document.getElementById('sort-by-select') ? document.getElementById('sort-by-select').value : 'recommendation';
+  clearSearchValidationError();
 
-  if (!origin || !destination || !date) {
-    showToast('Please specify Origin, Destination and Departure Date.', 'warning');
+  const originEl = document.getElementById('search-origin');
+  const destEl = document.getElementById('search-destination');
+  const dateEl = document.getElementById('search-date');
+  const returnDateEl = document.getElementById('search-return-date');
+  const passengersEl = document.getElementById('search-passengers');
+  const classEl = document.getElementById('search-class');
+  const sortByEl = document.getElementById('sort-by-select');
+  const tripTypeEl = document.querySelector('input[name="trip_type"]:checked');
+
+  const origin = originEl ? originEl.value.trim().toUpperCase() : '';
+  const destination = destEl ? destEl.value.trim().toUpperCase() : '';
+  const date = dateEl ? dateEl.value.trim() : '';
+  const tripType = tripTypeEl ? tripTypeEl.value : 'oneway';
+  const returnDate = returnDateEl ? returnDateEl.value.trim() : '';
+  const passengers = passengersEl ? parseInt(passengersEl.value, 10) : 1;
+  const travelClass = classEl ? classEl.value : 'economy';
+  const sortBy = sortByEl ? sortByEl.value : 'recommendation';
+
+  // 1. Validate departure city
+  if (!origin) {
+    showSearchValidationError('Please select a departure city (Origin Airport).', originEl);
+    return;
+  }
+
+  // 2. Validate destination city
+  if (!destination) {
+    showSearchValidationError('Please select a destination city (Destination Airport).', destEl);
+    return;
+  }
+
+  // 3. Ensure departure and destination cannot be the same
+  if (origin === destination) {
+    showSearchValidationError('Departure and destination cannot be the same city. Please select different airports.', destEl);
+    if (originEl) originEl.style.borderColor = 'var(--danger)';
+    return;
+  }
+
+  // 4. Validate departure date
+  if (!date) {
+    showSearchValidationError('Please select a departure date.', dateEl);
+    return;
+  }
+  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+  if (!dateRegex.test(date) || isNaN(Date.parse(date))) {
+    showSearchValidationError('Please enter a valid departure date (YYYY-MM-DD).', dateEl);
+    return;
+  }
+
+  // 5. Validate return date (for round trips)
+  if (tripType === 'roundtrip') {
+    if (!returnDate) {
+      showSearchValidationError('Please select a return date for your round trip.', returnDateEl);
+      return;
+    }
+    if (!dateRegex.test(returnDate) || isNaN(Date.parse(returnDate))) {
+      showSearchValidationError('Please enter a valid return date (YYYY-MM-DD).', returnDateEl);
+      return;
+    }
+    if (returnDate < date) {
+      showSearchValidationError('Return date cannot be earlier than your departure date.', returnDateEl);
+      return;
+    }
+  }
+
+  // 6. Validate passenger count
+  if (isNaN(passengers) || passengers < 1 || passengers > 9) {
+    showSearchValidationError('Please select a valid passenger count between 1 and 9.', passengersEl);
     return;
   }
 
@@ -30,16 +146,45 @@ async function performFlightSearch(e) {
     origin,
     destination,
     date,
+    returnDate,
+    tripType,
+    passengers,
     travelClass
   };
 
+  // Provide immediate loading feedback and prevent duplicate submissions
+  isSearchingFlights = true;
+  const searchBtn = document.getElementById('btn-search-flights') || document.querySelector('.btn-search');
+  let originalBtnHtml = '';
+  if (searchBtn) {
+    originalBtnHtml = searchBtn.innerHTML;
+    searchBtn.disabled = true;
+    searchBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Searching Flights...';
+  }
+
+  // Immediately switch view so user sees loading state
+  if (typeof switchView === 'function') {
+    switchView('search-view');
+  }
+
   const container = document.getElementById('flight-results-container');
+  const countSpan = document.getElementById('results-count-text');
+  const titleSpan = document.getElementById('search-header-title');
+
+  if (titleSpan) {
+    titleSpan.textContent = `${origin} → ${destination} Flight Options`;
+  }
+  if (countSpan) {
+    countSpan.textContent = 'Searching scheduled flights...';
+  }
   if (container) {
     container.innerHTML = `
-      <div style="text-align: center; padding: 4rem 1rem;">
-        <i class="fa-solid fa-plane-departure fa-spin" style="font-size: 2.5rem; color: var(--primary); margin-bottom: 1rem;"></i>
-        <h3 style="font-weight: 700;">Discovering Optimal Flights...</h3>
-        <p style="color: var(--text-muted);">Ranking schedules, assessing connection safety, and calculating journey costs</p>
+      <div style="text-align: center; padding: 4rem 1rem; background: white; border-radius: var(--radius-lg); border: 1px solid var(--border);">
+        <i class="fa-solid fa-plane-departure fa-spin" style="font-size: 2.6rem; color: var(--primary); margin-bottom: 1rem;"></i>
+        <h3 style="font-weight: 700; color: #1e3a8a;">Discovering Optimal Flights...</h3>
+        <p style="color: var(--text-muted); max-width: 520px; margin: 0.5rem auto 0 auto; line-height: 1.5;">
+          Checking real scheduled flights for <strong>${origin}</strong> to <strong>${destination}</strong> on <strong>${date}</strong> (${passengers} traveler${passengers > 1 ? 's' : ''}, ${travelClass.toUpperCase()})
+        </p>
       </div>
     `;
   }
@@ -49,27 +194,58 @@ async function performFlightSearch(e) {
       origin,
       destination,
       date,
+      return_date: tripType === 'roundtrip' ? returnDate : '',
+      trip_type: tripType,
+      passengers,
       class: travelClass,
       sort_by: sortBy
     });
 
     currentSearchResults = data.itineraries || [];
-    renderSearchResults(currentSearchResults);
+    renderSearchResults(currentSearchResults, {
+      origin,
+      destination,
+      date,
+      tripType,
+      returnDate,
+      passengers,
+      returnItineraries: data.return_itineraries || []
+    });
     updateFilterOptions(currentSearchResults);
-
-    // Switch to search view if not active
-    switchView('search-view');
   } catch (err) {
+    console.error('Flight search error:', err);
+    if (countSpan) {
+      countSpan.textContent = 'Search failed';
+    }
     if (container) {
       container.innerHTML = `
-        <div style="text-align: center; padding: 3rem 1rem;">
-          <i class="fa-solid fa-triangle-exclamation" style="font-size: 2rem; color: var(--danger); margin-bottom: 0.5rem;"></i>
-          <p style="font-weight: 700;">${err.message || 'Error fetching flights'}</p>
+        <div style="background: white; border-radius: var(--radius-lg); padding: 3rem 1.5rem; text-align: center; border: 1px solid #fecaca;">
+          <i class="fa-solid fa-triangle-exclamation" style="font-size: 2.6rem; color: var(--danger); margin-bottom: 1rem;"></i>
+          <h3 style="font-weight: 800; color: #991b1b; margin-bottom: 0.5rem;">Unable to Load Flights</h3>
+          <p style="color: var(--text-muted); max-width: 520px; margin: 0 auto 1.5rem auto; line-height: 1.5;">
+            ${err.message || 'We encountered an issue communicating with the flight search service. Please check your connection or retry.'}
+          </p>
+          <div style="display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
+            <button class="btn-search" onclick="performFlightSearch()">
+              <i class="fa-solid fa-rotate-right"></i> Try Again
+            </button>
+            <button style="background: transparent; border: 1px solid var(--border); padding: 0.65rem 1.25rem; border-radius: 8px; font-weight: 700; cursor: pointer;" onclick="switchView('home-view')">
+              <i class="fa-solid fa-arrow-left"></i> Modify Search Criteria
+            </button>
+          </div>
         </div>
       `;
     }
+    showToast(err.message || 'Error fetching flights from backend', 'danger');
+  } finally {
+    isSearchingFlights = false;
+    if (searchBtn) {
+      searchBtn.disabled = false;
+      searchBtn.innerHTML = originalBtnHtml || '<i class="fa-solid fa-magnifying-glass"></i> Search Flights';
+    }
   }
 }
+window.performFlightSearch = performFlightSearch;
 
 function openWhatIfSimulator() {
   const origin = (lastSearchCriteria && lastSearchCriteria.origin) || document.getElementById('search-origin')?.value || 'TIR';
@@ -106,22 +282,40 @@ function openWhatIfSimulator() {
 }
 window.openWhatIfSimulator = openWhatIfSimulator;
 
-function renderSearchResults(itineraries) {
+function renderSearchResults(itineraries, searchMeta = {}) {
   const container = document.getElementById('flight-results-container');
   const countSpan = document.getElementById('results-count-text');
   if (!container) return;
 
+  const origin = searchMeta.origin || (lastSearchCriteria && lastSearchCriteria.origin) || 'Origin';
+  const destination = searchMeta.destination || (lastSearchCriteria && lastSearchCriteria.destination) || 'Destination';
+  const date = searchMeta.date || (lastSearchCriteria && lastSearchCriteria.date) || 'Selected Date';
+  const passengers = searchMeta.passengers || (lastSearchCriteria && lastSearchCriteria.passengers) || 1;
+
   if (countSpan) {
-    countSpan.textContent = `${itineraries.length} flights found`;
+    countSpan.textContent = `${itineraries.length} flight option${itineraries.length === 1 ? '' : 's'} found`;
   }
 
   if (itineraries.length === 0) {
     container.innerHTML = `
-      <div style="background: white; border-radius: var(--radius-lg); padding: 3rem; text-align: center; border: 1px solid var(--border);">
-        <i class="fa-solid fa-plane-slash" style="font-size: 2.5rem; color: var(--text-light); margin-bottom: 1rem;"></i>
-        <h3 style="font-weight: 700; margin-bottom: 0.5rem;">No flights found for this route & date</h3>
-        <p style="color: var(--text-muted); margin-bottom: 1.5rem;">Try shifting dates using our What-If Simulator or searching nearby alternative airports.</p>
-        <button class="btn-search" style="margin: 0 auto;" onclick="openWhatIfSimulator()">Open What-If Date Simulator</button>
+      <div style="background: white; border-radius: var(--radius-lg); padding: 3rem 1.5rem; text-align: center; border: 1px solid var(--border);">
+        <i class="fa-solid fa-plane-slash" style="font-size: 2.8rem; color: var(--text-light); margin-bottom: 1rem;"></i>
+        <h3 style="font-weight: 800; margin-bottom: 0.5rem; color: #1e293b;">No Scheduled Flights Found</h3>
+        <p style="color: var(--text-muted); max-width: 540px; margin: 0 auto 1.5rem auto; line-height: 1.55; font-size: 0.95rem;">
+          We could not find any active scheduled flights from <strong>${origin}</strong> to <strong>${destination}</strong> on <strong>${date}</strong> in the FlyWise database.
+          <br><br>
+          <span style="font-size: 0.85rem; color: #64748b;">
+            💡 <em>Note: Our database currently contains scheduled domestic flights across major Indian airports (TIR, DEL, BOM, BLR, MAA, HYD, GOI, PNQ, JAI, DXB) for October - November 2026.</em>
+          </span>
+        </p>
+        <div style="display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
+          <button class="btn-search" style="padding: 0.65rem 1.5rem;" onclick="openWhatIfSimulator()">
+            <i class="fa-solid fa-calendar-days"></i> Open What-If Date Simulator
+          </button>
+          <button style="background: transparent; border: 1px solid var(--border); padding: 0.65rem 1.25rem; border-radius: 8px; font-weight: 700; cursor: pointer;" onclick="switchView('home-view')">
+            <i class="fa-solid fa-arrow-left"></i> Modify Search Criteria
+          </button>
+        </div>
       </div>
     `;
     return;
@@ -184,9 +378,12 @@ function renderSearchResults(itineraries) {
           </div>
 
           <div class="price-cta-col">
-            <div class="fare-amount">₹${Number(it.total_fare).toLocaleString('en-IN')}</div>
+            <div class="fare-amount">
+              ₹${Number(it.total_fare).toLocaleString('en-IN')}
+              ${passengers > 1 ? `<div style="font-size: 0.72rem; font-weight: 500; color: var(--text-muted);">₹${Number(it.total_fare * passengers).toLocaleString('en-IN')} for ${passengers} travelers</div>` : ''}
+            </div>
             <div class="total-journey-est" onclick="openCostBreakdownModal('${it.itinerary_id}')" title="Click to view itemized breakdown">
-              Est. Total: ₹${Number(it.estimated_journey_cost).toLocaleString('en-IN')} <i class="fa-solid fa-circle-info"></i>
+              Est. Total: ₹${Number(it.estimated_journey_cost * passengers).toLocaleString('en-IN')} <i class="fa-solid fa-circle-info"></i>
             </div>
             <div style="display: flex; gap: 0.5rem; align-items: center; margin-top: 0.5rem;">
               <label style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted); display: flex; align-items: center; gap: 4px; cursor: pointer;">

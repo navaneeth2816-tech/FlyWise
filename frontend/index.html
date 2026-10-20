@@ -84,16 +84,16 @@
       <div class="search-card">
         <div class="trip-type-selector">
           <label class="trip-radio-label">
-            <input type="radio" name="trip_type" value="oneway" checked>
+            <input type="radio" name="trip_type" value="oneway" checked onchange="toggleTripType('oneway')">
             <span>One Way</span>
           </label>
           <label class="trip-radio-label">
-            <input type="radio" name="trip_type" value="roundtrip">
+            <input type="radio" name="trip_type" value="roundtrip" onchange="toggleTripType('roundtrip')">
             <span>Round Trip</span>
           </label>
         </div>
 
-        <form id="flight-search-form" class="search-grid">
+        <form id="flight-search-form" class="search-grid" onsubmit="performFlightSearch(event)">
           <div class="form-group">
             <label>Origin Airport</label>
             <div class="input-with-icon">
@@ -143,6 +143,32 @@
             </div>
           </div>
 
+          <div class="form-group" id="search-return-date-group" style="display: none;">
+            <label>Return Date</label>
+            <div class="input-with-icon">
+              <i class="fa-solid fa-calendar-check"></i>
+              <input type="date" id="search-return-date" value="2026-10-26">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Passengers</label>
+            <div class="input-with-icon">
+              <i class="fa-solid fa-user-group"></i>
+              <select id="search-passengers">
+                <option value="1" selected>1 Passenger</option>
+                <option value="2">2 Passengers</option>
+                <option value="3">3 Passengers</option>
+                <option value="4">4 Passengers</option>
+                <option value="5">5 Passengers</option>
+                <option value="6">6 Passengers</option>
+                <option value="7">7 Passengers</option>
+                <option value="8">8 Passengers</option>
+                <option value="9">9 Passengers</option>
+              </select>
+            </div>
+          </div>
+
           <div class="form-group">
             <label>Travel Class</label>
             <div class="input-with-icon">
@@ -168,9 +194,14 @@
             </div>
           </div>
 
-          <button type="submit" class="btn-search">
+          <button type="submit" id="btn-search-flights" class="btn-search" onclick="performFlightSearch(event)">
             <i class="fa-solid fa-magnifying-glass"></i> Search Flights
           </button>
+
+          <div id="search-validation-msg" style="display: none; grid-column: 1 / -1; background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.88rem; font-weight: 600; align-items: center; gap: 0.5rem; margin-top: 0.25rem;">
+            <i class="fa-solid fa-circle-exclamation"></i>
+            <span id="search-validation-msg-text"></span>
+          </div>
         </form>
 
         <!-- Quick AI Prompt Shortcuts -->
