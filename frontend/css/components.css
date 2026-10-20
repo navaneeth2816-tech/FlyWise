@@ -1,0 +1,659 @@
+/* Components Stylesheet */
+
+/* Flight Search Results Layout */
+.results-layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 1.5rem;
+  margin-top: 2rem;
+}
+
+@media (max-width: 900px) {
+  .results-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Filters Sidebar */
+.filters-sidebar {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  height: fit-content;
+  box-shadow: var(--shadow-sm);
+}
+
+.filters-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.25rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.filter-group {
+  margin-bottom: 1.5rem;
+}
+
+.filter-group-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 0.75rem;
+  display: flex;
+  justify-content: space-between;
+}
+
+.filter-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-bottom: 0.45rem;
+  cursor: pointer;
+}
+
+.filter-checkbox-label input {
+  accent-color: var(--primary);
+}
+
+/* Results Toolbar */
+.results-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: white;
+  padding: 1rem 1.25rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  margin-bottom: 1rem;
+}
+
+.sort-select {
+  padding: 0.4rem 0.8rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  font-size: 0.88rem;
+  font-weight: 600;
+  outline: none;
+}
+
+/* Flight Cards */
+.flight-card {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.25rem;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.flight-card:hover {
+  box-shadow: var(--shadow-md);
+  border-color: #cbd5e1;
+}
+
+.flight-card.top-recommended {
+  border-left: 4px solid #10b981;
+}
+
+.flight-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.airline-badge-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.airline-logo-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 0.85rem;
+  color: var(--primary);
+}
+
+.airline-info h4 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.flight-number {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.badges-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.score-badge {
+  background: #ecfdf5;
+  color: #059669;
+  border: 1px solid #a7f3d0;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-size: 0.82rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.risk-badge {
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.risk-badge.LOW { background: #ecfdf5; color: #047857; }
+.risk-badge.MODERATE { background: #fffbeb; color: #b45309; }
+.risk-badge.HIGH { background: #fef2f2; color: #b91c1c; }
+
+/* Flight Card Body */
+.flight-card-body {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 1.5rem;
+  align-items: center;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+@media (max-width: 640px) {
+  .flight-card-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+.route-timeline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.time-point {
+  text-align: left;
+}
+.time-point.arr {
+  text-align: right;
+}
+
+.time-point .time {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--text-main);
+}
+
+.time-point .airport-code {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.time-point .city {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.duration-line {
+  flex: 1;
+  margin: 0 1.25rem;
+  text-align: center;
+  position: relative;
+}
+
+.duration-line .duration {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.duration-line .line {
+  height: 2px;
+  background: #cbd5e1;
+  position: relative;
+}
+
+.duration-line .line::after {
+  content: '✈';
+  position: absolute;
+  top: -8px;
+  right: 48%;
+  font-size: 0.75rem;
+  color: var(--primary);
+}
+
+.duration-line .stop-indicator {
+  font-size: 0.72rem;
+  color: #0284c7;
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+/* Price & CTA Column */
+.price-cta-col {
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.fare-amount {
+  font-size: 1.55rem;
+  font-weight: 800;
+  color: var(--text-main);
+}
+
+.total-journey-est {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  background: #f8fafc;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.total-journey-est:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.btn-select-flight {
+  background: var(--primary);
+  color: white;
+  border: none;
+  padding: 0.55rem 1.4rem;
+  border-radius: var(--radius-md);
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-select-flight:hover {
+  background: var(--primary-hover);
+}
+
+/* Card Explanations Accordion */
+.card-explanations {
+  margin-top: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.reasons-tags {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.reason-tag {
+  background: #f1f5f9;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+/* Compare Tray Drawer */
+.compare-tray {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #0f172a;
+  color: white;
+  padding: 1rem 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 -4px 15px rgba(0, 0, 0, 0.2);
+  z-index: 90;
+  transform: translateY(100%);
+  transition: transform 0.3s ease;
+}
+
+.compare-tray.show {
+  transform: translateY(0);
+}
+
+/* Interactive Seat Map Modal */
+.fuselage-container {
+  background: #f8fafc;
+  border: 2px solid var(--border);
+  border-radius: 40px 40px 10px 10px;
+  padding: 2rem 1.5rem;
+  max-width: 440px;
+  margin: 0 auto;
+}
+
+.fuselage-cockpit {
+  width: 100px;
+  height: 35px;
+  border: 2px solid #cbd5e1;
+  border-radius: 20px 20px 0 0;
+  margin: 0 auto 1.5rem;
+  background: #e2e8f0;
+}
+
+.seat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.6rem;
+}
+
+.seat-group {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.seat-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  background: white;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-main);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.seat-btn:hover:not(.booked) {
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+
+.seat-btn.selected {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+
+.seat-btn.booked {
+  background: #e2e8f0;
+  color: #94a3b8;
+  cursor: not-allowed;
+  border-color: #cbd5e1;
+}
+
+.seat-btn.business {
+  border-color: #f59e0b;
+  background: #fffbeb;
+}
+
+.aisle-gap {
+  width: 28px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #94a3b8;
+  text-align: center;
+}
+
+/* Digital Twin 10-Stage Timeline */
+.timeline-track {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  margin: 2.5rem 0;
+}
+
+.timeline-track::before {
+  content: '';
+  position: absolute;
+  top: 14px;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: #e2e8f0;
+  z-index: 1;
+}
+
+.timeline-step {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.step-node {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: white;
+  border: 3px solid #cbd5e1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 800;
+  transition: all 0.2s ease;
+}
+
+.timeline-step.completed .step-node {
+  background: var(--success);
+  border-color: var(--success);
+  color: white;
+}
+
+.timeline-step.active .step-node {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: white;
+  box-shadow: 0 0 0 5px rgba(30, 64, 175, 0.2);
+}
+
+.timeline-step.disrupted .step-node {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: white;
+  box-shadow: 0 0 0 5px rgba(239, 68, 68, 0.2);
+}
+
+.step-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  margin-top: 0.5rem;
+  color: var(--text-muted);
+  max-width: 80px;
+}
+
+/* Emergency Travel Mode Crisis Card */
+.emergency-banner {
+  background: linear-gradient(135deg, #7f1d1d, #991b1b);
+  color: white;
+  border-radius: var(--radius-lg);
+  padding: 1.5rem 2rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 8px 20px rgba(153, 27, 27, 0.25);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.emergency-btn-cta {
+  background: white;
+  color: #991b1b;
+  border: none;
+  padding: 0.65rem 1.4rem;
+  border-radius: var(--radius-md);
+  font-weight: 800;
+  font-size: 0.92rem;
+  cursor: pointer;
+}
+
+/* Modal Windows */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(4px);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.modal-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.modal-content {
+  background: white;
+  border-radius: var(--radius-lg);
+  max-width: 650px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+  padding: 2rem;
+  position: relative;
+}
+
+.modal-close-btn {
+  position: absolute;
+  top: 1.25rem;
+  right: 1.25rem;
+  background: #f1f5f9;
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+}
+
+/* AI Floating Chat Drawer */
+.ai-drawer {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  width: 420px;
+  height: 600px;
+  max-height: 85vh;
+  background: white;
+  border-radius: var(--radius-lg);
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  z-index: 150;
+  transform: translateY(115%);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+
+.ai-drawer.open {
+  transform: translateY(0);
+}
+
+.ai-drawer-header {
+  background: linear-gradient(135deg, #0f172a, #1e3a8a);
+  color: white;
+  padding: 1rem 1.25rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ai-chat-messages {
+  flex: 1;
+  padding: 1rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  background: #f8fafc;
+}
+
+.chat-bubble {
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  max-width: 85%;
+}
+
+.chat-bubble.user {
+  background: var(--primary);
+  color: white;
+  align-self: flex-end;
+  border-bottom-right-radius: 2px;
+}
+
+.chat-bubble.assistant {
+  background: white;
+  border: 1px solid var(--border);
+  color: var(--text-main);
+  align-self: flex-start;
+  border-bottom-left-radius: 2px;
+  box-shadow: var(--shadow-sm);
+}
+
+.ai-chat-input-bar {
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--border);
+  background: white;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.ai-chat-input-bar input {
+  flex: 1;
+  padding: 0.6rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+  outline: none;
+}
+
+.ai-chat-input-bar button {
+  background: var(--primary);
+  color: white;
+  border: none;
+  width: 40px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}

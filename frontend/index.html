@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FlyWise — Intelligent Flight Booking & Journey Management System</title>
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/components.css">
+</head>
+<body>
+
+  <!-- Navigation Bar -->
+  <nav class="navbar">
+    <div class="brand" onclick="switchView('home-view')">
+      <div class="brand-icon">
+        <i class="fa-solid fa-plane-up"></i>
+      </div>
+      <div>
+        <span>FlyWise</span>
+      </div>
+    </div>
+
+    <ul class="nav-links">
+      <li class="nav-link active" data-view="home-view" onclick="switchView('home-view')">
+        <i class="fa-solid fa-compass"></i> Discover
+      </li>
+      <li class="nav-link" data-view="journeys-view" onclick="switchView('journeys-view')">
+        <i class="fa-solid fa-ticket"></i> My Journeys
+      </li>
+      <li class="nav-link" data-view="tools-view" onclick="switchView('tools-view')">
+        <i class="fa-solid fa-screwdriver-wrench"></i> Travel Tools
+      </li>
+      <li class="nav-link" id="nav-admin-link" data-view="admin-view" onclick="switchView('admin-view')" style="display: none; color: #1e40af;">
+        <i class="fa-solid fa-gauge"></i> Admin Console
+      </li>
+    </ul>
+
+    <div class="nav-actions">
+      <button class="btn-ai-pill" onclick="toggleAiDrawer()">
+        <i class="fa-solid fa-wand-magic-sparkles"></i>
+        <span>Ask FlyWise AI</span>
+      </button>
+
+      <div id="nav-auth-container">
+        <!-- Injected by app.js -->
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Container -->
+  <main class="container">
+
+    <!-- 1. HOME VIEW (Landing & Search) -->
+    <section id="home-view" class="app-view">
+      <!-- Hero Banner -->
+      <div class="hero">
+        <div class="hero-tag">
+          <i class="fa-solid fa-sparkles"></i> AI-Powered Travel Decisions Grounded in MySQL
+        </div>
+        <h1>Book Smarter. Travel Safer.<br>Stay Ahead.</h1>
+        <p>
+          Discover flights ranked by your personal priorities, compare transparent journey costs, evaluate connection risks, and navigate disruptions with an AI companion.
+        </p>
+      </div>
+
+      <!-- Flight Search Card -->
+      <div class="search-card">
+        <div class="trip-type-selector">
+          <label class="trip-radio-label">
+            <input type="radio" name="trip_type" value="oneway" checked>
+            <span>One Way</span>
+          </label>
+          <label class="trip-radio-label">
+            <input type="radio" name="trip_type" value="roundtrip">
+            <span>Round Trip</span>
+          </label>
+        </div>
+
+        <form id="flight-search-form" class="search-grid">
+          <div class="form-group">
+            <label>Origin Airport</label>
+            <div class="input-with-icon">
+              <i class="fa-solid fa-plane-departure"></i>
+              <select id="search-origin" required>
+                <option value="TIR" selected>Tirupati (TIR) - Tirupati Airport</option>
+                <option value="DEL">Delhi (DEL) - Indira Gandhi Int'l</option>
+                <option value="BOM">Mumbai (BOM) - Chhatrapati Shivaji Int'l</option>
+                <option value="BLR">Bengaluru (BLR) - Kempegowda Int'l</option>
+                <option value="MAA">Chennai (MAA) - Chennai Int'l</option>
+                <option value="HYD">Hyderabad (HYD) - Rajiv Gandhi Int'l</option>
+                <option value="GOI">Goa (GOI) - Dabolim Airport</option>
+                <option value="PNQ">Pune (PNQ) - Pune Airport</option>
+                <option value="JAI">Jaipur (JAI) - Jaipur Int'l</option>
+                <option value="DXB">Dubai (DXB) - Dubai Int'l</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label style="display: flex; justify-content: space-between;">
+              <span>Destination</span>
+              <span style="color: var(--primary); cursor: pointer; text-transform: none; font-size: 0.72rem;" onclick="swapAirports()"><i class="fa-solid fa-arrow-right-arrow-left"></i> Swap</span>
+            </label>
+            <div class="input-with-icon">
+              <i class="fa-solid fa-plane-arrival"></i>
+              <select id="search-destination" required>
+                <option value="DEL" selected>Delhi (DEL) - Indira Gandhi Int'l</option>
+                <option value="TIR">Tirupati (TIR) - Tirupati Airport</option>
+                <option value="BOM">Mumbai (BOM) - Chhatrapati Shivaji Int'l</option>
+                <option value="BLR">Bengaluru (BLR) - Kempegowda Int'l</option>
+                <option value="MAA">Chennai (MAA) - Chennai Int'l</option>
+                <option value="HYD">Hyderabad (HYD) - Rajiv Gandhi Int'l</option>
+                <option value="GOI">Goa (GOI) - Dabolim Airport</option>
+                <option value="PNQ">Pune (PNQ) - Pune Airport</option>
+                <option value="JAI">Jaipur (JAI) - Jaipur Int'l</option>
+                <option value="DXB">Dubai (DXB) - Dubai Int'l</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Departure Date</label>
+            <div class="input-with-icon">
+              <i class="fa-solid fa-calendar"></i>
+              <input type="date" id="search-date" value="2026-10-23" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Travel Class</label>
+            <div class="input-with-icon">
+              <i class="fa-solid fa-chair"></i>
+              <select id="search-class">
+                <option value="economy" selected>Economy</option>
+                <option value="business">Business Club</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Sort By</label>
+            <div class="input-with-icon">
+              <i class="fa-solid fa-arrow-down-short-wide"></i>
+              <select id="sort-by-select">
+                <option value="recommendation" selected>★ Best Recommendation Score</option>
+                <option value="price">Lowest Ticket Fare</option>
+                <option value="total_cost">Lowest Total Journey Cost</option>
+                <option value="duration">Shortest Duration</option>
+                <option value="earliest_departure">Earliest Departure</option>
+              </select>
+            </div>
+          </div>
+
+          <button type="submit" class="btn-search">
+            <i class="fa-solid fa-magnifying-glass"></i> Search Flights
+          </button>
+        </form>
+
+        <!-- Quick AI Prompt Shortcuts -->
+        <div class="quick-prompts">
+          <span class="quick-prompts-label"><i class="fa-solid fa-wand-magic-sparkles" style="color: #6366f1;"></i> Ask FlyWise AI</span>
+          <span class="prompt-pill" onclick="sendSuggestedPrompt('Find flights from Tirupati to Delhi next Friday under ₹7,000')">
+            "Tirupati to Delhi under ₹7,000"
+          </span>
+          <span class="prompt-pill" onclick="sendSuggestedPrompt('Compare cheapest flight vs fastest flight from Delhi to Mumbai')">
+            "Cheapest vs Shortest to Mumbai"
+          </span>
+          <span class="prompt-pill" onclick="sendSuggestedPrompt('What is the baggage allowance and excess charges for IndiGo?')">
+            "IndiGo Baggage Rules"
+          </span>
+          <span class="prompt-pill" onclick="sendSuggestedPrompt('What if I travel 2 days earlier from Tirupati to Delhi?')">
+            "What if I travel earlier?"
+          </span>
+          <span class="prompt-pill" onclick="sendSuggestedPrompt('Is a 45 min layover safe at Mumbai Airport?')">
+            "Connection risk at Mumbai"
+          </span>
+        </div>
+      </div>
+
+      <!-- Feature Cards Grid (Compact & Professional) -->
+      <div style="margin-bottom: 2.5rem;">
+        <div style="margin-bottom: 1rem;">
+          <h3 style="font-weight: 800; font-size: 1.25rem; color: var(--text-main);">Why Choose FlyWise? 5 Smart Travel Features</h3>
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 2px;">Smart flight comparisons, transparent costs, safer connections, and helpful travel support—all in one place.</p>
+        </div>
+        <div class="feature-cards-grid">
+          <div class="feature-card">
+            <div class="feature-card-icon" style="background: #eff6ff; color: var(--primary);">
+              <i class="fa-solid fa-brain"></i>
+            </div>
+            <h4 class="feature-card-title">1. Best Flight Match</h4>
+            <p class="feature-card-desc">
+              Compare flights by price, travel time, schedule, and safety to find the option that best suits your needs.
+            </p>
+          </div>
+
+          <div class="feature-card">
+            <div class="feature-card-icon" style="background: #ecfdf5; color: #059669;">
+              <i class="fa-solid fa-calculator"></i>
+            </div>
+            <h4 class="feature-card-title">2. Total Journey Cost</h4>
+            <p class="feature-card-desc">
+              See the estimated total cost, including airfare, taxes, baggage, seat selection, and airport transfers.
+            </p>
+          </div>
+
+          <div class="feature-card">
+            <div class="feature-card-icon" style="background: #fffbeb; color: #d97706;">
+              <i class="fa-solid fa-shield-halved"></i>
+            </div>
+            <h4 class="feature-card-title">3. Connection Safety</h4>
+            <p class="feature-card-desc">
+              Understand your connection risks with clear LOW, MODERATE, or HIGH risk indicators based on layover time and available flight information.
+            </p>
+          </div>
+
+          <div class="feature-card">
+            <div class="feature-card-icon" style="background: #fef2f2; color: #dc2626;">
+              <i class="fa-solid fa-plane-circle-exclamation"></i>
+            </div>
+            <h4 class="feature-card-title">4. Flight Disruption Alerts</h4>
+            <p class="feature-card-desc">
+              Find alternative flights during disruptions and get helpful information about passenger rights and airline support.
+            </p>
+          </div>
+
+          <div class="feature-card">
+            <div class="feature-card-icon" style="background: #f5f3ff; color: #7c3aed;">
+              <i class="fa-solid fa-timeline"></i>
+            </div>
+            <h4 class="feature-card-title">5. Trip Planner</h4>
+            <p class="feature-card-desc">
+              Manage your journey with pre-departure checklists, travel reminders, and a record of your trip details.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Popular Indian Routes Pre-sets -->
+      <div style="margin-bottom: 3rem;">
+        <h3 style="font-weight: 800; font-size: 1.25rem; margin-bottom: 1rem;">Popular Routes</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem;">
+          <div class="flight-card" style="margin-bottom: 0; cursor: pointer;" onclick="setQuickRoute('TIR', 'DEL')">
+            <div style="font-weight: 800; font-size: 1.05rem; color: var(--primary);">Tirupati (TIR) → Delhi (DEL)</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">Direct (2h 45m) • Daily Flights from ₹4,999</div>
+          </div>
+          <div class="flight-card" style="margin-bottom: 0; cursor: pointer;" onclick="setQuickRoute('DEL', 'BOM')">
+            <div style="font-weight: 800; font-size: 1.05rem; color: var(--primary);">Delhi (DEL) → Mumbai (BOM)</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">Golden Trunk Route • 2h 15m from ₹3,950</div>
+          </div>
+          <div class="flight-card" style="margin-bottom: 0; cursor: pointer;" onclick="setQuickRoute('BLR', 'GOI')">
+            <div style="font-weight: 800; font-size: 1.05rem; color: var(--primary);">Bengaluru (BLR) → Goa (GOI)</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">Holiday Route • 1h 15m from ₹2,650</div>
+          </div>
+          <div class="flight-card" style="margin-bottom: 0; cursor: pointer;" onclick="setQuickRoute('DEL', 'DXB')">
+            <div style="font-weight: 800; font-size: 1.05rem; color: var(--primary);">Delhi (DEL) → Dubai (DXB)</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">International Non-stop • 3h 45m from ₹13,500</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. SEARCH RESULTS VIEW -->
+    <section id="search-view" class="app-view" style="display: none;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+        <div>
+          <button style="background: none; border: none; font-size: 0.85rem; font-weight: 700; color: var(--primary); cursor: pointer; margin-bottom: 0.35rem;" onclick="switchView('home-view')">
+            <i class="fa-solid fa-arrow-left"></i> Modify Search Criteria
+          </button>
+          <h2 style="font-weight: 800; font-size: 1.6rem;" id="search-header-title">Flight Options</h2>
+        </div>
+        <div style="font-size: 0.9rem; color: var(--text-muted); font-weight: 600;" id="results-count-text">
+          Loading flights...
+        </div>
+      </div>
+
+      <div class="results-layout">
+        <!-- Filters Sidebar -->
+        <aside class="filters-sidebar">
+          <div class="filters-header">
+            <h4 style="font-weight: 800; font-size: 1rem;"><i class="fa-solid fa-sliders"></i> Filters</h4>
+            <span style="font-size: 0.75rem; color: var(--primary); cursor: pointer; font-weight: 700;" onclick="performFlightSearch()">Reset</span>
+          </div>
+
+          <!-- Max Price Range -->
+          <div class="filter-group">
+            <div class="filter-group-title">
+              <span>Max Ticket Fare</span>
+              <span id="price-range-val" style="color: var(--primary);">₹15,000</span>
+            </div>
+            <input type="range" id="price-filter-range" min="2000" max="25000" step="500" value="20000" style="width: 100%; accent-color: var(--primary);" oninput="applyFilters()">
+          </div>
+
+          <!-- Stops Filter -->
+          <div class="filter-group">
+            <div class="filter-group-title">Connections</div>
+            <div id="stops-filter-checkboxes">
+              <label class="filter-checkbox-label">
+                <input type="checkbox" value="0" checked onchange="applyFilters()">
+                <span>Non-stop Direct Flights</span>
+              </label>
+              <label class="filter-checkbox-label">
+                <input type="checkbox" value="1" checked onchange="applyFilters()">
+                <span>1 Stop Connections</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Airline Filter -->
+          <div class="filter-group">
+            <div class="filter-group-title">Airlines</div>
+            <div id="airline-filter-checkboxes">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+        </aside>
+
+        <!-- Results Main List -->
+        <div>
+          <div id="flight-results-container">
+            <!-- Flight cards populated by search.js -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. JOURNEYS VIEW (Companion & Digital Twin) -->
+    <section id="journeys-view" class="app-view" style="display: none;">
+      <div style="margin-bottom: 2rem;">
+        <h1 style="font-weight: 800; font-size: 1.85rem;">Journey Companion & Digital Twin</h1>
+        <p style="color: var(--text-muted);">
+          Track your active flights, inspect the 10-stage journey lifecycle, prepare checklists, and activate disruption recovery.
+        </p>
+      </div>
+
+      <div id="journeys-container">
+        <!-- Rendered by journey.js -->
+      </div>
+    </section>
+
+    <!-- 4. SMART TRAVEL TOOLS VIEW -->
+    <section id="tools-view" class="app-view" style="display: none;">
+      <div style="margin-bottom: 2rem;">
+        <h1 style="font-weight: 800; font-size: 1.85rem;">Smart Travel Decision Tools</h1>
+        <p style="color: var(--text-muted);">
+          Intelligent utilities designed for budget optimization, scam verification, baggage policy interpretation, and group coordination.
+        </p>
+      </div>
+
+      <!-- Tools Tab Navigation -->
+      <div style="display: flex; gap: 0.75rem; border-bottom: 1px solid var(--border); margin-bottom: 2rem; overflow-x: auto; padding-bottom: 0.5rem;">
+        <button class="nav-link active" onclick="switchToolTab('whatif-tab', this)">
+          <i class="fa-solid fa-calendar-days"></i> What-If Simulator
+        </button>
+        <button class="nav-link" onclick="switchToolTab('airports-tab', this)">
+          <i class="fa-solid fa-location-dot"></i> Alternative Airports
+        </button>
+        <button class="nav-link" onclick="switchToolTab('baggage-tab', this)">
+          <i class="fa-solid fa-suitcase"></i> Baggage Assistant
+        </button>
+        <button class="nav-link" onclick="switchToolTab('scam-tab', this)">
+          <i class="fa-solid fa-shield-virus"></i> Scam & PNR Verifier
+        </button>
+        <button class="nav-link" onclick="switchToolTab('group-tab', this)">
+          <i class="fa-solid fa-users"></i> Group Travel Optimiser
+        </button>
+      </div>
+
+      <!-- Tool 1: What-If Date Simulator -->
+      <div id="whatif-tab" class="tool-content-tab">
+        <div style="background: white; border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.75rem; margin-bottom: 1.5rem;">
+          <h3 style="font-weight: 800; margin-bottom: 0.5rem;"><i class="fa-solid fa-calendar-week" style="color: var(--primary);"></i> What-If Flight Simulator (PRD Section 14)</h3>
+          <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem;">
+            Evaluate how shifting your travel date by ±1 to 3 days affects total journey cost, schedule options, and potential savings.
+          </p>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 1rem; align-items: end; margin-bottom: 1.5rem;">
+            <div class="form-group">
+              <label>Origin</label>
+              <input type="text" id="whatif-origin" value="TIR" style="padding: 0.65rem; border: 1px solid var(--border); border-radius: 8px;">
+            </div>
+            <div class="form-group">
+              <label>Destination</label>
+              <input type="text" id="whatif-destination" value="DEL" style="padding: 0.65rem; border: 1px solid var(--border); border-radius: 8px;">
+            </div>
+            <div class="form-group">
+              <label>Baseline Date</label>
+              <input type="date" id="whatif-date" value="2026-10-23" style="padding: 0.65rem; border: 1px solid var(--border); border-radius: 8px;">
+            </div>
+            <button class="btn-search" onclick="runWhatIfSimulator()">
+              Simulate Dates
+            </button>
+          </div>
+
+          <div id="whatif-results">
+            <!-- Injected by tools.js -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Tool 2: Alternative Airport Finder -->
+      <div id="airports-tab" class="tool-content-tab" style="display: none;">
+        <div style="background: white; border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.75rem;">
+          <h3 style="font-weight: 800; margin-bottom: 0.5rem;"><i class="fa-solid fa-map-pin" style="color: var(--primary);"></i> Smart Alternative-Airport Finder (PRD Section 15)</h3>
+          <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem;">
+            Compare nearby airport hubs (e.g. Tirupati vs Chennai/Bengaluru, Pune vs Mumbai) including ground cab travel time and cost trade-offs.
+          </p>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 1rem; align-items: end; margin-bottom: 1.5rem;">
+            <div class="form-group">
+              <label>Primary Origin</label>
+              <input type="text" id="altairport-origin" value="TIR" style="padding: 0.65rem; border: 1px solid var(--border); border-radius: 8px;">
+            </div>
+            <div class="form-group">
+              <label>Destination</label>
+              <input type="text" id="altairport-dest" value="DEL" style="padding: 0.65rem; border: 1px solid var(--border); border-radius: 8px;">
+            </div>
+            <div class="form-group">
+              <label>Departure Date</label>
+              <input type="date" id="altairport-date" value="2026-10-23" style="padding: 0.65rem; border: 1px solid var(--border); border-radius: 8px;">
+            </div>
+            <button class="btn-search" onclick="runAlternativeAirports()">
+              Find Alternatives
+            </button>
+          </div>
+
+          <div id="altairport-results">
+            <!-- Injected by tools.js -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Tool 3: Smart Baggage Assistant -->
+      <div id="baggage-tab" class="tool-content-tab" style="display: none;">
+        <div style="background: white; border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.75rem;">
+          <h3 style="font-weight: 800; margin-bottom: 0.5rem;"><i class="fa-solid fa-suitcase-rolling" style="color: var(--primary);"></i> Smart Baggage Policy Assistant (PRD Section 16)</h3>
+          <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem;">
+            Calculate allowances and excess baggage fees across IndiGo, Air India, Vistara, SpiceJet, and Akasa Air.
+          </p>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 1rem; align-items: end; margin-bottom: 1.5rem;">
+            <div class="form-group">
+              <label>Airline</label>
+              <select id="baggage-airline-select" style="padding: 0.65rem; border: 1px solid var(--border); border-radius: 8px;">
+                <option value="6E" selected>IndiGo (6E)</option>
+                <option value="AI">Air India (AI)</option>
+                <option value="UK">Vistara (UK)</option>
+                <option value="SG">SpiceJet (SG)</option>
+                <option value="QP">Akasa Air (QP)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Travel Class</label>
+              <select id="baggage-class-select" style="padding: 0.65rem; border: 1px solid var(--border); border-radius: 8px;">
+                <option value="economy" selected>Economy</option>
+                <option value="business">Business Club</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Expected Weight (kg)</label>
+              <input type="number" id="baggage-weight-input" value="20" style="padding: 0.65rem; border: 1px solid var(--border); border-radius: 8px;">
+            </div>
+            <button class="btn-search" onclick="calculateBaggageRules()">
+              Calculate Rules
+            </button>
+          </div>
+
+          <div id="baggage-calc-results">
+            <!-- Injected by tools.js -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Tool 4: Scam & Verification Assistant -->
+      <div id="scam-tab" class="tool-content-tab" style="display: none;">
+        <div style="background: white; border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.75rem;">
+          <h3 style="font-weight: 800; margin-bottom: 0.5rem;"><i class="fa-solid fa-shield-halved" style="color: #dc2626;"></i> Booking Verification & Scam Assistance (PRD Section 18)</h3>
+          <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem;">
+            Paste suspicious SMS, WhatsApp messages, or cancellation threats to evaluate phishing indicators, unauthorized UPI demands, and fake links.
+          </p>
+
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <label>Paste Message Text / SMS / Email</label>
+            <textarea id="scam-message-text" rows="4" style="width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 8px; font-family: inherit;" placeholder="e.g. URGENT: Your flight ticket will be cancelled in 10 minutes unless you pay ₹499 verification fee by scanning QR code..."></textarea>
+          </div>
+
+          <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem;">
+            <button class="btn-search" onclick="runScamAnalysis()">
+              <i class="fa-solid fa-magnifying-glass"></i> Analyze Fraud Signs
+            </button>
+            <button style="background: #f1f5f9; border: 1px solid var(--border); padding: 0.65rem 1.25rem; border-radius: 8px; font-weight: 700; cursor: pointer;" onclick="document.getElementById('scam-message-text').value = 'URGENT: Air India flight PNR FW-123 requires immediate verification fee of ₹500. Scan UPI QR code attached within 15 minutes or ticket is cancelled.'; runScamAnalysis();">
+              Load Phishing Sample
+            </button>
+          </div>
+
+          <div id="scam-results">
+            <!-- Injected by tools.js -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Tool 5: Group Travel Optimiser -->
+      <div id="group-tab" class="tool-content-tab" style="display: none;">
+        <div style="background: white; border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.75rem;">
+          <h3 style="font-weight: 800; margin-bottom: 0.5rem;"><i class="fa-solid fa-users-rays" style="color: var(--primary);"></i> Group Travel Optimiser (PRD Section 19)</h3>
+          <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem;">
+            Consolidate individual member budgets, seating preferences, and discovery of common affordable flights for families, friends, and college trips.
+          </p>
+
+          <div style="display: flex; justify-content: space-between; align-items: center; background: #f8fafc; padding: 1rem; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 1.5rem;">
+            <div>
+              <strong>Sample Trip: Goa College Reunion 2026</strong>
+              <div style="font-size: 0.85rem; color: var(--text-muted);">Route: Bengaluru (BLR) → Goa (GOI) • Departure: Oct 28, 2026</div>
+            </div>
+            <button class="btn-search" style="font-size: 0.85rem; height: 38px;" onclick="runGroupOptimization()">
+              Optimise Group Itineraries
+            </button>
+          </div>
+
+          <div id="group-optimizer-results">
+            <!-- Injected by tools.js -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. ADMIN VIEW -->
+    <section id="admin-view" class="app-view" style="display: none;">
+      <div style="margin-bottom: 2rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <h1 style="font-weight: 800; font-size: 1.85rem;">Administration & Telemetry Console</h1>
+            <p style="color: var(--text-muted);">
+              Manage flight inventory, view Chart.js operational metrics, test database triggers, and monitor Gemini AI API latency.
+            </p>
+          </div>
+          <span style="background: #f1f5f9; padding: 6px 12px; border-radius: var(--radius-full); font-size: 0.8rem; font-weight: 700;">
+            <i class="fa-solid fa-server" style="color: var(--primary);"></i> MySQL 8.0 Connected
+          </span>
+        </div>
+      </div>
+
+      <div id="admin-content-pane">
+        <!-- Rendered by admin.js -->
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Bottom Compare Tray Drawer -->
+  <div id="compare-tray" class="compare-tray">
+    <div style="display: flex; align-items: center; gap: 1rem;">
+      <span style="font-weight: 800;"><i class="fa-solid fa-code-compare"></i> Compare Flights (<span id="compare-count">0</span>/3)</span>
+      <div id="compare-items-list" style="display: flex; gap: 0.5rem;"></div>
+    </div>
+    <div style="display: flex; gap: 0.75rem;">
+      <button style="background: rgba(255,255,255,0.2); border: none; color: white; padding: 0.5rem 1rem; border-radius: 6px; font-weight: 600; cursor: pointer;" onclick="selectedForCompare = []; updateCompareTray(); renderSearchResults(currentSearchResults);">Clear</button>
+      <button class="btn-search" style="height: 38px;" onclick="showComparisonModal()">Launch Comparison</button>
+    </div>
+  </div>
+
+  <!-- Floating Gemini AI Chat Drawer -->
+  <div id="ai-chat-drawer" class="ai-drawer">
+    <div class="ai-drawer-header">
+      <div style="display: flex; align-items: center; gap: 0.5rem; font-weight: 800;">
+        <i class="fa-solid fa-wand-magic-sparkles" style="color: #67e8f9;"></i>
+        <span>FlyWise Travel Assistant</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <button style="background: rgba(255,255,255,0.15); border: none; color: white; cursor: pointer; font-size: 0.78rem; padding: 4px 8px; border-radius: 4px; display: flex; align-items: center; gap: 4px;" onclick="clearAiChat()" title="Start New Chat">
+          <i class="fa-solid fa-rotate-right"></i> New Chat
+        </button>
+        <button style="background: transparent; border: none; color: white; cursor: pointer; font-size: 1.1rem; padding: 0 4px;" onclick="toggleAiDrawer()" title="Close">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+    </div>
+
+    <div id="ai-chat-messages-container" class="ai-chat-messages">
+      <div class="chat-bubble assistant">
+        Hello! I am your <strong>FlyWise AI Assistant</strong>.<br><br>
+        I can answer general questions and help you plan your journey — search flights, compare costs, check baggage policies, and assess connection safety. How can I help you today?
+      </div>
+    </div>
+
+    <form id="ai-chat-form" class="ai-chat-input-bar">
+      <input type="text" id="ai-chat-input" placeholder="Ask any question (travel or general)..." autocomplete="off" required>
+      <button type="submit" id="ai-chat-send-btn" title="Send Message">
+        <i class="fa-solid fa-paper-plane"></i>
+      </button>
+    </form>
+  </div>
+
+  <!-- MODALS -->
+
+  <!-- 1. Auth Modal -->
+  <div id="auth-modal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 440px;">
+      <button class="modal-close-btn" onclick="closeModal('auth-modal')">×</button>
+      <div style="display: flex; border-bottom: 1px solid var(--border); margin-bottom: 1.5rem;">
+        <button id="tab-btn-login" style="flex: 1; padding: 0.75rem; background: none; border: none; font-weight: 700; cursor: pointer; border-bottom: 2px solid var(--primary); color: var(--primary);" onclick="switchAuthTab('login')">Log In</button>
+        <button id="tab-btn-register" style="flex: 1; padding: 0.75rem; background: none; border: none; font-weight: 700; cursor: pointer; color: var(--text-muted);" onclick="switchAuthTab('register')">Create Account</button>
+      </div>
+
+      <!-- Login Form -->
+      <div id="login-form-container">
+        <form id="login-form">
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <label>Email Address</label>
+            <input type="email" id="login-email" value="navaneeth@flywise.ai" style="padding: 0.65rem; border: 1px solid var(--border); border-radius: 8px; width: 100%;" required>
+          </div>
+          <div class="form-group" style="margin-bottom: 1.25rem;">
+            <label>Password</label>
+            <div class="password-input-wrap">
+              <input type="password" id="login-password" value="Password@123" required>
+              <button type="button" class="btn-toggle-pwd" onclick="togglePasswordVisibility('login-password', this)" title="Show/Hide Password">
+                <i class="fa-solid fa-eye"></i>
+              </button>
+            </div>
+          </div>
+          <button type="submit" class="btn-search" style="width: 100%;">Sign In</button>
+          <div style="font-size: 0.78rem; color: var(--text-muted); text-align: center; margin-top: 1rem; border-top: 1px dashed var(--border); padding-top: 0.75rem;">
+            <span style="font-weight: 600;">Fill Demo Credentials:</span>
+            <div style="display: flex; gap: 0.5rem; justify-content: center; margin-top: 0.4rem;">
+              <button type="button" class="btn-demo-creds" onclick="fillDemoCredentials('user')">Demo User</button>
+              <button type="button" class="btn-demo-creds" onclick="fillDemoCredentials('admin')">Demo Admin</button>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <!-- Register Form -->
+      <div id="register-form-container" style="display: none;">
+        <form id="register-form">
+          <div class="form-group" style="margin-bottom: 0.75rem;">
+            <label>Full Name</label>
+            <input type="text" id="register-name" placeholder="e.g. Navaneeth Reddy" style="padding: 0.65rem; border: 1px solid var(--border); border-radius: 8px; width: 100%;" required>
+          </div>
+          <div class="form-group" style="margin-bottom: 0.75rem;">
+            <label>Email Address</label>
+            <input type="email" id="register-email" placeholder="e.g. you@example.com" style="padding: 0.65rem; border: 1px solid var(--border); border-radius: 8px; width: 100%;" required>
+          </div>
+          <div class="form-group" style="margin-bottom: 0.75rem;">
+            <label>Mobile Number (Optional)</label>
+            <input type="tel" id="register-phone" placeholder="e.g. +91 9876543210" style="padding: 0.65rem; border: 1px solid var(--border); border-radius: 8px; width: 100%;">
+          </div>
+          <div class="form-group" style="margin-bottom: 0.75rem;">
+            <label>Password</label>
+            <div class="password-input-wrap">
+              <input type="password" id="register-password" placeholder="At least 8 chars with Aa1@" oninput="updatePasswordLiveValidation()" required>
+              <button type="button" class="btn-toggle-pwd" onclick="togglePasswordVisibility('register-password', this)" title="Show/Hide Password">
+                <i class="fa-solid fa-eye"></i>
+              </button>
+            </div>
+          </div>
+          <div class="form-group" style="margin-bottom: 0.75rem;">
+            <label>Confirm Password</label>
+            <div class="password-input-wrap">
+              <input type="password" id="register-confirm-password" placeholder="Re-type password" oninput="updatePasswordLiveValidation()" required>
+              <button type="button" class="btn-toggle-pwd" onclick="togglePasswordVisibility('register-confirm-password', this)" title="Show/Hide Password">
+                <i class="fa-solid fa-eye"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Live Password Validation Criteria Checklist -->
+          <div class="password-criteria-list" id="password-criteria-list">
+            <div class="criteria-item invalid" id="rule-length">
+              <i class="fa-solid fa-circle-xmark"></i> At least 8 characters
+            </div>
+            <div class="criteria-item invalid" id="rule-upper">
+              <i class="fa-solid fa-circle-xmark"></i> One uppercase letter (A-Z)
+            </div>
+            <div class="criteria-item invalid" id="rule-lower">
+              <i class="fa-solid fa-circle-xmark"></i> One lowercase letter (a-z)
+            </div>
+            <div class="criteria-item invalid" id="rule-digit">
+              <i class="fa-solid fa-circle-xmark"></i> One number (0-9)
+            </div>
+            <div class="criteria-item invalid" id="rule-special">
+              <i class="fa-solid fa-circle-xmark"></i> One special character (!@#$%^&*...)
+            </div>
+            <div class="criteria-item invalid" id="rule-match">
+              <i class="fa-solid fa-circle-xmark"></i> Passwords match
+            </div>
+          </div>
+
+          <button type="submit" class="btn-search" style="width: 100%; margin-top: 0.5rem;">Create Account</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. Booking Modal -->
+  <div id="booking-modal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 850px;">
+      <button class="modal-close-btn" onclick="closeModal('booking-modal')">×</button>
+      <div id="booking-modal-body"></div>
+    </div>
+  </div>
+
+  <!-- 3. Ticket Confirmation Modal -->
+  <div id="ticket-modal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 840px; padding: 1.25rem;">
+      <button class="modal-close-btn" onclick="closeModal('ticket-modal')">×</button>
+      <div id="ticket-modal-body"></div>
+    </div>
+  </div>
+
+  <!-- 4. Cost Breakdown & Score Explain Modal -->
+  <div id="cost-modal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 500px;">
+      <button class="modal-close-btn" onclick="closeModal('cost-modal')">×</button>
+      <div id="cost-modal-body"></div>
+    </div>
+  </div>
+
+  <!-- 5. Flight Comparison Modal -->
+  <div id="comparison-modal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 850px;">
+      <button class="modal-close-btn" onclick="closeModal('comparison-modal')">×</button>
+      <div id="comparison-modal-body"></div>
+    </div>
+  </div>
+
+  <!-- 6. Emergency Travel Mode Modal -->
+  <div id="emergency-modal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 700px;">
+      <button class="modal-close-btn" onclick="closeModal('emergency-modal')">×</button>
+      <div id="emergency-modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer>
+    <div class="footer-grid">
+      <div class="footer-col">
+        <h4 style="display: flex; align-items: center; gap: 0.5rem; color: white;">
+          <i class="fa-solid fa-plane-departure" style="color: var(--accent);"></i> FlyWise
+        </h4>
+        <p style="font-size: 0.85rem; line-height: 1.6; margin-bottom: 1rem;">
+          FlyWise is an intelligent flight booking platform that helps travelers discover flights, plan journeys, and manage bookings with ease.
+        </p>
+      </div>
+      <div class="footer-col">
+        <h4>Core Modules</h4>
+        <ul>
+          <li onclick="switchView('home-view')">Flight Discovery</li>
+          <li onclick="switchView('journeys-view')">Digital Twin Companion</li>
+          <li onclick="switchToolTab('whatif-tab', null); switchView('tools-view');">What-If Simulator</li>
+          <li onclick="switchToolTab('airports-tab', null); switchView('tools-view');">Alternative Airports</li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Intelligence</h4>
+        <ul>
+          <li onclick="toggleAiDrawer()">FlyWise Travel AI</li>
+          <li onclick="switchToolTab('baggage-tab', null); switchView('tools-view');">Baggage Calculator</li>
+          <li onclick="switchToolTab('scam-tab', null); switchView('tools-view');">Scam & PNR Checker</li>
+          <li onclick="switchToolTab('group-tab', null); switchView('tools-view');">Group Travel Optimizer</li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Trust & Security</h4>
+        <ul>
+          <li>Verified Schedules</li>
+          <li>Instant Seat Confirmation</li>
+          <li>Transparent Fare Rules</li>
+          <li onclick="switchView('admin-view')">System Status</li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <div>© 2026 FlyWise. All rights reserved. Your trusted platform for smarter flight booking.</div>
+      <div>Designed for Indian & International Aviation Network.</div>
+    </div>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="js/api.js"></script>
+  <script src="js/search.js"></script>
+  <script src="js/booking.js"></script>
+  <script src="js/journey.js"></script>
+  <script src="js/assistant.js"></script>
+  <script src="js/tools.js"></script>
+  <script src="js/admin.js"></script>
+  <script src="js/app.js"></script>
+
+  <script>
+    function switchToolTab(tabId, btn) {
+      document.querySelectorAll('.tool-content-tab').forEach(t => t.style.display = 'none');
+      const target = document.getElementById(tabId);
+      if (target) target.style.display = 'block';
+
+      if (btn) {
+        document.querySelectorAll('#tools-view .nav-link').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      }
+    }
+
+    function navigateToJourneys() {
+      switchView('journeys-view');
+    }
+  </script>
+</body>
+</html>

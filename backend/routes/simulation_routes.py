@@ -1,0 +1,156 @@
+import json
+from datetime import datetime, timedelta
+from flask import Blueprint, request, jsonify
+from database import query_all, query_one
+from services.flight_service import search_flights
+
+simulation_bp = Blueprint('simulation', __name__, url_prefix='/api/v1/simulation')
+
+@simulation_bp.route('/alternatives', methods=['POST'])
+def simulate_dates():
+    """
+    What-If Simulator: compares alternative dates (-3 to +3 days).
+    PRD Section 14.
+    """
+    data = request.get_json() or {}
+    origin = data.get('origin', 'TIR').strip().upper()
+    destination = data.get('destination', 'DEL').strip().upper()
+    base_date_str = data.get('departure_date', '2026-10-23').strip()
+
+    try:
+        base_dt = datetime.strptime(base_date_str, "%Y-%m-%d")
+    except Exception:
+        base_dt = datetime(2026, 10, 23)
+
+    day_shifts = [-3, -2, -1, 0, 1, 2, 3]
+    timeline = []
+
+    for shift in day_shifts:
+        check_dt = base_dt + timedelta(days=shift)
+        date_str = check_dt.strftime("%Y-%m-%d")
+        
+        # Search direct & connecting for this date
+        flights = search_flights(origin, destination, date_str, max_stops=1)
+        if flights:
+            cheapest = min(flights, key=lambda x: x['total_fare'])
+            fastest = min(flights, key=lambda x: x['duration_minutes'])
+            timeline.append({
+                "date": date_str,
+                "day_name": check_dt.strftime("%a, %b %d"),
+                "shift_days": shift,
+                "flight_count": len(flights),
+                "lowest_fare": cheapest['total_fare'],
+                "cheapest_flight": {
+                    "airline": cheapest['airline_name'],
+                    "flight_number": cheapest['segments'][0]['flight_number'],
+                    "departure": cheapest['departure_time'],
+                    "stops": cheapest['stops'],
+                    "duration_minutes": cheapest['duration_minutes']
+                },
+                "fastest_duration_minutes": fastest['duration_minutes']
+            })
+        else:
+            # Fallback realistic estimate if outside scheduled window
+            est_fare = 5200 + (abs(shift) * 200)
+            timeline.append({
+                "date": date_str,
+                "day_name": check_dt.strftime("%a, %b %d"),
+                "shift_days": shift,
+                "flight_count": 0,
+                "lowest_fare": est_fare,
+                "cheapest_flight": None,
+                "fastest_duration_minutes": 165
+            })
+
+    # Compare baseline (shift 0) with lowest in timeline
+    baseline_fare = next((t['lowest_fare'] for t in timeline if t['shift_days'] == 0), 5800)
+    best_option = min(timeline, key=lambda x: x['lowest_fare'])
+    savings = baseline_fare - best_option['lowest_fare']
+
+    insights = []
+    if savings > 0 and best_option['shift_days'] != 0:
+        insights.append(f"Travelling on {best_option['day_name']} ({best_option['shift_days']} days difference) saves ₹{savings:,.0f} in flight fares.")
+    else:
+        insights.append("Your chosen departure date offers the best available fare rate for this week.")
+
+    return jsonify({
+        "status": "success",
+        "origin": origin,
+        "destination": destination,
+        "base_date": base_date_str,
+        "baseline_fare": baseline_fare,
+        "max_savings_inr": max(0, savings),
+        "best_date": best_option['date'],
+        "timeline": timeline,
+        "insights": insights
+    })
+
+@simulation_bp.route('/airports', methods=['POST'])
+def simulate_airports():
+    """
+    Smart Alternative-Airport Finder.
+    PRD Section 15: Compares nearby airport options with ground transport costs and travel times.
+    """
+    data = request.get_json() or {}
+    origin = data.get('origin', 'TIR').strip().upper()
+    destination = data.get('destination', 'DEL').strip().upper()
+    dep_date = data.get('departure_date', '2026-10-23').strip()
+
+    # Get airport details
+    orig_airport = query_one("SELECT * FROM airports WHERE iata_code = %s;", (origin,))
+    if not orig_airport:
+        return jsonify({"status": "error", "message": "Origin airport not found"}), 404
+
+    term_info = orig_airport['terminal_information']
+    if isinstance(term_info, str):
+        term_info = json.loads(term_info)
+    nearby = term_info.get('nearby_alternatives', [])
+
+    # Search original direct/connecting flights
+    primary_flights = search_flights(origin, destination, dep_date, max_stops=1)
+    primary_cheapest = min(primary_flights, key=lambda x: x['total_fare']) if primary_flights else None
+
+    alternatives_analysis = []
+
+    for alt in nearby:
+        alt_code = alt['airport']
+        alt_flights = search_flights(alt_code, destination, dep_date, max_stops=1)
+        if alt_flights:
+            alt_cheapest = min(alt_flights, key=lambda x: x['total_fare'])
+            flight_fare = alt_cheapest['total_fare']
+            cab_cost = alt.get('est_cab_inr', 2500)
+            road_hrs = alt.get('road_hrs', 3.5)
+            
+            alt_total_cost = flight_fare + cab_cost
+            primary_total_cost = (primary_cheapest['total_fare'] + 500) if primary_cheapest else 99999
+            net_difference = primary_total_cost - alt_total_cost
+
+            recommendation = ""
+            if net_difference > 1000:
+                recommendation = f"Favorable: Saves ₹{net_difference:,.0f} overall even after including ₹{cab_cost} ground cab transit."
+            elif net_difference > 0:
+                recommendation = f"Marginal savings of ₹{net_difference:,.0f}, but adds {road_hrs}h road travel. Recommended only if flight times are more convenient."
+            else:
+                recommendation = f"Not recommended: Flying directly from {origin} is cheaper and saves {road_hrs}h ground travel."
+
+            alternatives_analysis.append({
+                "alternative_airport_code": alt_code,
+                "distance_km": alt.get('distance_km'),
+                "road_travel_hours": road_hrs,
+                "ground_cab_cost_inr": cab_cost,
+                "flight_fare_inr": flight_fare,
+                "total_journey_cost_inr": alt_total_cost,
+                "net_savings_vs_primary": net_difference,
+                "cheapest_flight": alt_cheapest,
+                "recommendation": recommendation
+            })
+
+    return jsonify({
+        "status": "success",
+        "primary_origin": origin,
+        "destination": destination,
+        "departure_date": dep_date,
+        "primary_cheapest_fare": primary_cheapest['total_fare'] if primary_cheapest else None,
+        "nearby_airports_evaluated": len(alternatives_analysis),
+        "alternatives": alternatives_analysis
+    })
