@@ -41,7 +41,7 @@ def chat():
         return jsonify({
             "status": "success",
             "conversation_id": conversation_id or 1,
-            "reply": "I am here to help you discover flights, check baggage allowances, and answer your travel questions. Please ask me about flight routes (e.g. *Tirupati to Delhi*), baggage rules, or connection risks.",
+            "reply": "I apologize, but I could not process your message at this moment. Please check your network connection or try asking again. You can also explore flights, check baggage allowances, or simulate alternative travel dates.",
             "itineraries": [],
             "entities": {},
             "latency_ms": 50

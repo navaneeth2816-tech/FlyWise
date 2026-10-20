@@ -104,6 +104,33 @@ def extract_search_entities(user_message):
         "budget": budget
     }
 
+def sanitize_contents_payload(recent_history, current_prompt):
+    """
+    Ensures that conversation turns alternate strictly between 'user' and 'model'
+    and that consecutive messages from the same role are combined.
+    """
+    raw_turns = []
+    for h in recent_history:
+        role = 'user' if h.get('sender_type') == 'user' else 'model'
+        text = (h.get('message_content') or '').strip()
+        if text:
+            raw_turns.append({'role': role, 'text': text})
+
+    raw_turns.append({'role': 'user', 'text': current_prompt})
+
+    sanitized = []
+    for t in raw_turns:
+        if not sanitized:
+            if t['role'] == 'user':
+                sanitized.append({"role": "user", "parts": [{"text": t['text']}]})
+        else:
+            if sanitized[-1]['role'] == t['role']:
+                sanitized[-1]['parts'][0]['text'] += "\n" + t['text']
+            else:
+                sanitized.append({"role": t['role'], "parts": [{"text": t['text']}]})
+
+    return sanitized
+
 def process_assistant_chat(user_message, user_id=None, conversation_id=None):
     """
     Orchestrates conversational AI interaction:
@@ -218,47 +245,53 @@ def process_assistant_chat(user_message, user_id=None, conversation_id=None):
 
     current_prompt = "".join(prompt_parts)
 
-    # Format multi-turn contents
-    contents_payload = []
-    for h in recent_history:
-        role = 'user' if h.get('sender_type') == 'user' else 'model'
-        contents_payload.append({
-            "role": role,
-            "parts": [{"text": h.get('message_content', '')}]
-        })
-    contents_payload.append({
-        "role": "user",
-        "parts": [{"text": current_prompt}]
-    })
+    # Format multi-turn contents with alternating turn sanitization
+    contents_payload = sanitize_contents_payload(recent_history, current_prompt)
 
     assistant_reply = ""
     status = "success"
     latency_ms = 0
 
-    # Models to attempt (fast low-latency priority list)
+    # Models to attempt: primary responsive model first, then fallbacks
     models_to_try = []
-    primary_model = Config.GEMINI_MODEL or "gemini-3.1-flash-lite-preview"
-    for m in [primary_model, "gemma-4-26b-a4b-it"]:
+    primary_model = Config.GEMINI_MODEL or "gemini-robotics-er-2-preview"
+    for m in [primary_model, "gemini-3.1-flash-lite-preview", "gemma-4-26b-a4b-it"]:
         if m and m not in models_to_try:
             models_to_try.append(m)
 
     model_used = None
     if Config.GEMINI_API_KEY:
         for idx, model_name in enumerate(models_to_try):
-            # Strict short timeouts: 3.0s for primary, 2.0s for secondary to guarantee fast response
-            req_timeout = 3.0 if idx == 0 else 2.0
+            req_timeout = 10.0 if idx == 0 else 6.0
             try:
+                is_gemma = 'gemma' in model_name.lower()
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={Config.GEMINI_API_KEY}"
-                payload = {
-                    "systemInstruction": {
-                        "parts": [{"text": SYSTEM_INSTRUCTION}]
-                    },
-                    "contents": contents_payload,
-                    "generationConfig": {
-                        "temperature": 0.4,
-                        "maxOutputTokens": 800
+                
+                # Build payload: Gemma models do not accept systemInstruction in the v1beta schema
+                if is_gemma:
+                    gemma_contents = [
+                        {
+                            "role": c["role"],
+                            "parts": [{"text": (f"System context: {SYSTEM_INSTRUCTION}\n\n" + c["parts"][0]["text"]) if i == 0 else c["parts"][0]["text"]}]
+                        }
+                        for i, c in enumerate(contents_payload)
+                    ]
+                    payload = {
+                        "contents": gemma_contents,
+                        "generationConfig": {"maxOutputTokens": 800}
                     }
-                }
+                else:
+                    payload = {
+                        "systemInstruction": {
+                            "parts": [{"text": SYSTEM_INSTRUCTION}]
+                        },
+                        "contents": contents_payload,
+                        "generationConfig": {
+                            "temperature": 0.4,
+                            "maxOutputTokens": 800
+                        }
+                    }
+
                 resp = requests.post(url, json=payload, timeout=req_timeout)
                 latency_ms = int((time.time() - start_time) * 1000)
 
@@ -266,20 +299,23 @@ def process_assistant_chat(user_message, user_id=None, conversation_id=None):
                     resp_json = resp.json()
                     candidates = resp_json.get("candidates", [])
                     if candidates:
-                        assistant_reply = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-                        if assistant_reply:
+                        parts = candidates[0].get("content", {}).get("parts", [])
+                        # Extract final text part, ignoring internal reasoning thoughts
+                        text_parts = [p.get("text", "") for p in parts if not p.get("thought", False) and "text" in p]
+                        reply_cand = text_parts[-1] if text_parts else (parts[0].get("text", "") if parts else "")
+                        if reply_cand.strip():
+                            assistant_reply = reply_cand.strip()
                             model_used = model_name
                             status = "success"
                             break
                 elif resp.status_code == 429:
-                    print(f"Gemini API ({model_name}) quota limit (429); skipping to fast fallback.")
+                    print(f"Gemini API ({model_name}) quota limit (429); checking fallback...")
                     status = "http_429"
-                    break # Don't burn time retrying when key quota is reached
                 else:
-                    print(f"Gemini API ({model_name}) status {resp.status_code}")
+                    print(f"Gemini API ({model_name}) status {resp.status_code}: {resp.text[:120]}")
                     status = f"http_{resp.status_code}"
             except Exception as e:
-                print(f"Gemini API ({model_name}) timed out/error ({e}); falling back immediately.")
+                print(f"Gemini API ({model_name}) error/timeout ({e}); checking fallback...")
                 status = "timeout"
                 latency_ms = int((time.time() - start_time) * 1000)
     else:
@@ -302,7 +338,8 @@ Review the flight cards below to book your seat or compare complete cost breakdo
         elif entities.get('origin') and entities.get('destination'):
             assistant_reply = f"I searched the flight database for **{entities['origin']} to {entities['destination']}**, but no scheduled flights were found for {entities['departure_date']}. Try shifting your departure date using our What-If Date Simulator or checking nearby airport hubs like Chennai (MAA) or Bengaluru (BLR)."
         else:
-            assistant_reply = "I am ready to help you! You can ask me any general knowledge questions or travel queries — for example: *'Find flights from Tirupati to Delhi under ₹7,000'*, *'What are the baggage rules for Air India?'*, or *'What is the connection risk at Mumbai Airport?'*"
+            # Helpful error message instead of returning the welcome message as an answer
+            assistant_reply = "I apologize, but I was unable to connect to the AI service to answer your question at this moment. Please check your network connection or try asking again. You can also ask me about flight schedules, baggage allowances, or connection risks."
 
     # Store assistant reply in DB asynchronously in background to eliminate client wait time
     def _persist_log():

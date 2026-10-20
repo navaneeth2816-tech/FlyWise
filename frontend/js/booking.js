@@ -8,6 +8,7 @@ let currentFlightSeats = [];
 let bookingWizardStep = 1; // Step 1: Passenger & Seat, Step 2: Demo OTP, Step 3: Summary & Demo Payment
 let bookingPassengerData = null; // { full_name, email, phone, gender, date_of_birth, addons }
 let activeDemoOtp = null; // 6-digit demonstration OTP from backend
+let activeVerificationRequestId = null; // Unique server-side verification request ID
 let bookingVerificationToken = null; // Single-use verification token from backend
 let selectedPaymentMode = 'card'; // 'card', 'upi', 'qr', 'netbanking'
 let isOtpSending = false;
@@ -30,6 +31,7 @@ async function startBookingFlow(itineraryId) {
   bookingWizardStep = 1;
   bookingPassengerData = null;
   activeDemoOtp = null;
+  activeVerificationRequestId = null;
   bookingVerificationToken = null;
   selectedPaymentMode = 'card';
   isBookingSubmitting = false;
@@ -400,6 +402,9 @@ function goToBookingStep2() {
 
 function goToBookingStep1() {
   bookingWizardStep = 1;
+  activeDemoOtp = null;
+  activeVerificationRequestId = null;
+  bookingVerificationToken = null;
   renderBookingWizard();
 }
 
@@ -532,6 +537,7 @@ async function sendBookingOtp(isResend = false) {
 
     if (res && res.status === 'success' && res.demo_otp) {
       activeDemoOtp = res.demo_otp;
+      activeVerificationRequestId = res.request_id;
       bookingVerificationToken = null; // Reset any previous token
       showToast(`Demonstration OTP: ${res.demo_otp} (Sandbox Mode — No SMS sent)`, 'info');
     } else {
@@ -550,6 +556,10 @@ async function sendBookingOtp(isResend = false) {
 }
 
 function autofillDemoOtp(code) {
+  if (!activeDemoOtp || !activeVerificationRequestId) {
+    showToast("No active OTP request found. Please click 'Send OTP' first.", "warning");
+    return;
+  }
   const input = document.getElementById('demo-otp-input');
   const errEl = document.getElementById('otp-error-msg');
   if (input) {
@@ -581,6 +591,13 @@ async function verifyBookingOtp() {
   const verifyBtn = document.getElementById('btn-verify-otp');
   const code = input ? input.value.trim() : '';
 
+  if (!activeVerificationRequestId && !activeDemoOtp) {
+    const errMsg = "No active OTP request found. Please click 'Send OTP' first.";
+    if (errEl) errEl.textContent = errMsg;
+    showToast(errMsg, 'warning');
+    return;
+  }
+
   if (!code || code.length !== 6) {
     if (errEl) errEl.textContent = 'Please enter the exact 6-digit demonstration OTP code.';
     if (input) input.focus();
@@ -596,6 +613,7 @@ async function verifyBookingOtp() {
 
   try {
     const res = await api.post('/bookings/otp/verify', {
+      request_id: activeVerificationRequestId,
       otp: code,
       phone: bookingPassengerData.phone
     });
@@ -618,6 +636,10 @@ async function verifyBookingOtp() {
     isOtpVerifying = false;
     if (verifyBtn) {
       verifyBtn.disabled = false;
+      verifyBtn.innerHTML = '<i class="fa-solid fa-shield-check"></i> Verify OTP & Continue';
+    }
+  }
+}
       verifyBtn.innerHTML = '<i class="fa-solid fa-shield-check"></i> Verify OTP & Continue';
     }
   }
