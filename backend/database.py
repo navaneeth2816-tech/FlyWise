@@ -29,16 +29,20 @@ def clean_row(row):
 
 def get_connection():
     """Creates a raw MySQL connection."""
-    return pymysql.connect(
-        host=Config.DB_HOST,
-        port=Config.DB_PORT,
-        user=Config.DB_USER,
-        password=Config.DB_PASSWORD,
-        database=Config.DB_NAME,
-        charset='utf8mb4',
-        cursorclass=pymysql.cursors.DictCursor,
-        autocommit=False
-    )
+    kwargs = {
+        'host': Config.DB_HOST,
+        'port': Config.DB_PORT,
+        'user': Config.DB_USER,
+        'password': Config.DB_PASSWORD,
+        'database': Config.DB_NAME,
+        'charset': 'utf8mb4',
+        'cursorclass': pymysql.cursors.DictCursor,
+        'autocommit': False,
+        'connect_timeout': 10
+    }
+    if Config.DB_SSL:
+        kwargs['ssl'] = {'ssl_mode': 'REQUIRED'}
+    return pymysql.connect(**kwargs)
 
 @contextmanager
 def get_db_cursor(commit=False):

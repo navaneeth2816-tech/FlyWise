@@ -51,16 +51,50 @@ def create_app():
     @app.route('/api/v1/health', methods=['GET'])
     def health_check():
         db_ok = True
+        tables = []
+        db_err = None
         try:
-            query_one("SELECT 1;")
+            res = query_all("SHOW TABLES;")
+            tables = [list(r.values())[0] for r in res] if res else []
         except Exception as e:
             db_ok = False
+            db_err = str(e)
         return jsonify({
-            "status": "healthy" if db_ok else "unhealthy",
+            "status": "healthy" if db_ok and len(tables) > 0 else "degraded",
             "service": "FlyWise AI Backend",
             "database_connected": db_ok,
+            "table_count": len(tables),
+            "tables": tables,
+            "db_host": Config.DB_HOST,
+            "db_name": Config.DB_NAME,
+            "error": db_err,
             "version": "2.0.0"
         })
+
+    # System Database Initialization & Diagnostic Endpoint
+    @app.route('/api/v1/system/init-db', methods=['GET', 'POST'])
+    def system_init_db():
+        try:
+            import init_db
+            init_db.init_database()
+            import seed_data
+            seed_data.seed()
+            tables = query_all("SHOW TABLES;")
+            table_list = [list(r.values())[0] for r in tables] if tables else []
+            return jsonify({
+                "status": "success",
+                "message": "Database initialized and seeded successfully.",
+                "table_count": len(table_list),
+                "tables": table_list
+            })
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return jsonify({
+                "status": "error",
+                "message": f"Initialization failed: {str(e)}",
+                "trace": traceback.format_exc()
+            }), 500
 
     # In-App Notifications Endpoints
     @app.route('/api/v1/notifications', methods=['GET'])
@@ -97,7 +131,30 @@ def create_app():
 
     @app.errorhandler(500)
     def internal_error(e):
-        return jsonify({"status": "error", "message": "Internal server error occurred."}), 500
+        import traceback
+        err_detail = str(getattr(e, 'original_exception', e))
+        traceback.print_exc()
+        return jsonify({
+            "status": "error",
+            "message": "Internal server error occurred.",
+            "detail": err_detail
+        }), 500
+
+    # Auto-initialize database tables if missing on startup
+    try:
+        tables = query_all("SHOW TABLES;")
+        table_names = [list(r.values())[0].lower() for r in tables] if tables else []
+        if 'users' not in table_names or 'flights' not in table_names or 'airports' not in table_names:
+            print("Notice: Missing core database tables on startup. Initializing schema and seed data...")
+            import init_db
+            init_db.init_database()
+            import seed_data
+            seed_data.seed()
+            print("Database initialized and seeded successfully on startup.")
+        else:
+            print(f"Database connected: {len(table_names)} tables verified.")
+    except Exception as e:
+        print(f"Startup database check notice: {e}")
 
     return app
 

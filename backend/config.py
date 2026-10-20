@@ -1,4 +1,5 @@
 import os
+import urllib.parse
 from datetime import timedelta
 from dotenv import load_dotenv
 
@@ -14,6 +15,25 @@ class Config:
     DB_USER = os.getenv("DB_USER", "root")
     DB_PASSWORD = os.getenv("DB_PASSWORD", "Lamo@2008")
     DB_NAME = os.getenv("DB_NAME", "flywise_db")
+    DB_SSL = os.getenv("DB_SSL", "").lower() in ("true", "1", "required")
+
+    # Cloud Database URL parser (Render / Railway / TiDB / PlanetScale / Aiven)
+    _db_url = os.getenv("DATABASE_URL") or os.getenv("MYSQL_URL") or os.getenv("JAWSDB_URL")
+    if _db_url and ("mysql" in _db_url or "mariadb" in _db_url):
+        try:
+            _parsed = urllib.parse.urlparse(_db_url)
+            if _parsed.hostname:
+                DB_HOST = _parsed.hostname
+            if _parsed.port:
+                DB_PORT = int(_parsed.port)
+            if _parsed.username:
+                DB_USER = urllib.parse.unquote(_parsed.username)
+            if _parsed.password:
+                DB_PASSWORD = urllib.parse.unquote(_parsed.password)
+            if _parsed.path and len(_parsed.path) > 1:
+                DB_NAME = _parsed.path.lstrip('/')
+        except Exception as _e:
+            print(f"Notice: Failed to parse DATABASE_URL: {_e}")
     
     # Gemini AI
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")

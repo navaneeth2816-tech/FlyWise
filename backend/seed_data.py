@@ -1,30 +1,30 @@
 import os
+import sys
 import json
 import random
 from datetime import datetime, timedelta
 import pymysql
 from werkzeug.security import generate_password_hash
-from dotenv import load_dotenv
 
-load_dotenv()
-
-DB_HOST = os.getenv("DB_HOST", "localhost")
-DB_PORT = int(os.getenv("DB_PORT", 3306))
-DB_USER = os.getenv("DB_USER", "root")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "Lamo@2008")
-DB_NAME = os.getenv("DB_NAME", "flywise_db")
+# Add backend directory to sys.path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from config import Config
 
 def get_connection():
-    return pymysql.connect(
-        host=DB_HOST,
-        port=DB_PORT,
-        user=DB_USER,
-        password=DB_PASSWORD,
-        database=DB_NAME,
-        charset='utf8mb4',
-        cursorclass=pymysql.cursors.DictCursor,
-        autocommit=False
-    )
+    kwargs = {
+        'host': Config.DB_HOST,
+        'port': Config.DB_PORT,
+        'user': Config.DB_USER,
+        'password': Config.DB_PASSWORD,
+        'database': Config.DB_NAME,
+        'charset': 'utf8mb4',
+        'cursorclass': pymysql.cursors.DictCursor,
+        'autocommit': False,
+        'connect_timeout': 10
+    }
+    if Config.DB_SSL:
+        kwargs['ssl'] = {'ssl_mode': 'REQUIRED'}
+    return pymysql.connect(**kwargs)
 
 def seed():
     print("Starting comprehensive database seeding for FlyWise AI...")

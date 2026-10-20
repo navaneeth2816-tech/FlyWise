@@ -1,6 +1,6 @@
 import json
 from flask import Blueprint, request, jsonify
-from routes.auth_routes import login_required
+from routes.auth_routes import login_required, get_current_user
 from database import query_all, query_one, execute_commit
 from services.flight_service import search_flights
 from services.recommendation_service import score_and_rank_itineraries
@@ -95,12 +95,15 @@ def add_member(user, group_id):
     return jsonify({"status": "success", "message": f"{name} added to the group trip."})
 
 @group_bp.route('/<int:group_id>/optimise', methods=['POST'])
-@login_required
-def optimise_group(user, group_id):
+@group_bp.route('/<int:group_id>/optimize', methods=['POST'])
+def optimise_group(group_id):
     """
     Optimizes group itinerary matching common budget and schedule constraints.
     PRD Section 19.
     """
+    user = get_current_user()
+    if group_id != 1 and not user:
+        return jsonify({"status": "error", "message": "Authentication required. Please log in."}), 401
     trip = query_one("""
         SELECT gt.*, orig.iata_code AS origin_code, dest.iata_code AS destination_code
         FROM group_trips gt

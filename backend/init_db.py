@@ -1,30 +1,62 @@
 import os
+import sys
 import pymysql
-from dotenv import load_dotenv
 
-# Load environment
-load_dotenv()
-
-DB_HOST = os.getenv("DB_HOST", "localhost")
-DB_PORT = int(os.getenv("DB_PORT", 3306))
-DB_USER = os.getenv("DB_USER", "root")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "Lamo@2008")
-DB_NAME = os.getenv("DB_NAME", "flywise_db")
+# Add backend directory to sys.path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from config import Config
 
 def init_database():
-    print(f"Connecting to MySQL server at {DB_HOST}:{DB_PORT} as {DB_USER}...")
-    conn = pymysql.connect(
-        host=DB_HOST,
-        port=DB_PORT,
-        user=DB_USER,
-        password=DB_PASSWORD,
-        charset='utf8mb4',
-        autocommit=True
-    )
+    host = Config.DB_HOST
+    port = Config.DB_PORT
+    user = Config.DB_USER
+    password = Config.DB_PASSWORD
+    dbname = Config.DB_NAME
+
+    print(f"Connecting to MySQL server at {host}:{port} as {user} (database: '{dbname}')...")
+
+    conn = None
+    # 1. First attempt: connect directly with database name (standard on cloud providers)
+    try:
+        connect_kwargs = {
+            'host': host,
+            'port': port,
+            'user': user,
+            'password': password,
+            'database': dbname,
+            'charset': 'utf8mb4',
+            'autocommit': True,
+            'connect_timeout': 10
+        }
+        if Config.DB_SSL:
+            connect_kwargs['ssl'] = {'ssl_mode': 'REQUIRED'}
+        conn = pymysql.connect(**connect_kwargs)
+        print(f"Connected directly to database '{dbname}'.")
+    except Exception as direct_err:
+        print(f"Notice: Direct connection to '{dbname}' failed ({direct_err}). Trying without database name...")
+        # 2. Second attempt: connect without database and CREATE DATABASE IF NOT EXISTS
+        try:
+            connect_kwargs = {
+                'host': host,
+                'port': port,
+                'user': user,
+                'password': password,
+                'charset': 'utf8mb4',
+                'autocommit': True,
+                'connect_timeout': 10
+            }
+            if Config.DB_SSL:
+                connect_kwargs['ssl'] = {'ssl_mode': 'REQUIRED'}
+            conn = pymysql.connect(**connect_kwargs)
+            with conn.cursor() as cur:
+                cur.execute(f"CREATE DATABASE IF NOT EXISTS `{dbname}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;")
+                cur.execute(f"USE `{dbname}`;")
+            print(f"Database '{dbname}' created/selected.")
+        except Exception as e:
+            print(f"Could not connect without database: {e}")
+            raise direct_err
+
     cursor = conn.cursor()
-    cursor.execute(f"CREATE DATABASE IF NOT EXISTS {DB_NAME} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;")
-    cursor.execute(f"USE {DB_NAME};")
-    print(f"Database '{DB_NAME}' selected.")
 
     schema_file = os.path.join(os.path.dirname(__file__), "schema.sql")
     with open(schema_file, "r", encoding="utf-8") as f:
