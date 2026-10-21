@@ -134,6 +134,12 @@ def create_app():
         import traceback
         err_detail = str(getattr(e, 'original_exception', e))
         traceback.print_exc()
+        if any(sig in err_detail.lower() for sig in ("can't connect to mysql", "name or service not known", "operationalerror", "2003", "connection refused", "timed out")):
+            return jsonify({
+                "status": "error",
+                "message": "Database service is temporarily unavailable. Please verify cloud database connection and server status.",
+                "detail": err_detail
+            }), 503
         return jsonify({
             "status": "error",
             "message": "Internal server error occurred.",

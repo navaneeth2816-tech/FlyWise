@@ -263,7 +263,14 @@ async function handleLogin(e) {
   const email = document.getElementById('login-email').value.trim();
   const password = document.getElementById('login-password').value;
 
+  const submitBtn = e.target.querySelector('button[type="submit"]');
+  const originalText = submitBtn ? submitBtn.innerHTML : 'Sign In';
+
   try {
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Signing In...';
+    }
     const data = await api.post('/auth/login', { email, password });
     api.setToken(data.token);
     api.setUser(data.user);
@@ -273,6 +280,11 @@ async function handleLogin(e) {
     switchView('journeys-view');
   } catch (err) {
     showToast(err.message || 'Login failed', 'danger');
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = originalText;
+    }
   }
 }
 
@@ -283,6 +295,11 @@ async function handleRegister(e) {
   const password = document.getElementById('register-password').value;
   const confirmPassword = document.getElementById('register-confirm-password').value;
   const phone = document.getElementById('register-phone').value.trim();
+
+  if (!name || !email || !password) {
+    showToast('Please fill in all required fields.', 'danger');
+    return;
+  }
 
   if (password !== confirmPassword) {
     showToast('Passwords do not match. Please verify.', 'danger');
@@ -311,7 +328,15 @@ async function handleRegister(e) {
     return;
   }
 
+  const submitBtn = e.target.querySelector('button[type="submit"]');
+  const originalText = submitBtn ? submitBtn.innerHTML : 'Create Account';
+
   try {
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Creating Account...';
+    }
+
     const data = await api.post('/auth/register', {
       full_name: name,
       email,
@@ -327,6 +352,11 @@ async function handleRegister(e) {
     switchView('journeys-view');
   } catch (err) {
     showToast(err.message || 'Registration failed', 'danger');
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = originalText;
+    }
   }
 }
 

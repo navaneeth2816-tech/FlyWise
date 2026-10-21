@@ -22,7 +22,11 @@ def get_current_user():
     user_fields = "user_id, full_name, email, phone, role, preferred_language, account_status, created_at"
     # 1. Check Flask session
     if 'user_id' in session:
-        return query_one(f"SELECT {user_fields} FROM users WHERE user_id = %s;", (session['user_id'],))
+        try:
+            return query_one(f"SELECT {user_fields} FROM users WHERE user_id = %s;", (session['user_id'],))
+        except Exception as e:
+            print(f"Warning: Failed to fetch current user from session: {e}")
+            return None
     
     # 2. Check Authorization Header Bearer token
     auth_header = request.headers.get('Authorization')
@@ -31,7 +35,8 @@ def get_current_user():
         try:
             decoded = jwt.decode(token, Config.SECRET_KEY, algorithms=['HS256'])
             return query_one(f"SELECT {user_fields} FROM users WHERE user_id = %s;", (decoded['user_id'],))
-        except Exception:
+        except Exception as e:
+            print(f"Warning: Failed to fetch current user from token: {e}")
             return None
     return None
 
@@ -97,20 +102,57 @@ def register():
         return jsonify({"status": "error", "message": err_msg}), 400
 
     # Check duplicate email
-    existing = query_one("SELECT user_id FROM users WHERE email = %s;", (email,))
-    if existing:
-        return jsonify({"status": "error", "message": "An account with this email already exists."}), 409
+    try:
+        existing = query_one("SELECT user_id FROM users WHERE email = %s;", (email,))
+        if existing:
+            return jsonify({"status": "error", "message": "An account with this email already exists."}), 409
+    except Exception as e:
+        err_str = str(e).lower()
+        if any(sig in err_str for sig in ("can't connect to mysql", "name or service not known", "2003", "operationalerror", "connection refused")):
+            return jsonify({
+                "status": "error",
+                "message": "Database service is temporarily unavailable. Please verify cloud database status.",
+                "detail": str(e)
+            }), 503
+        raise
 
     pwd_hash = generate_password_hash(password)
-    user_id = execute_commit("""
-        INSERT INTO users (full_name, email, password_hash, phone, preferred_language, role, account_status)
-        VALUES (%s, %s, %s, %s, %s, 'user', 'active');
-    """, (full_name, email, pwd_hash, phone, preferred_language))
+    try:
+        user_id = execute_commit("""
+            INSERT INTO users (full_name, email, password_hash, phone, preferred_language, role, account_status)
+            VALUES (%s, %s, %s, %s, %s, 'user', 'active');
+        """, (full_name, email, pwd_hash, phone, preferred_language))
+    except Exception as e:
+        err_str = str(e).lower()
+        if '1062' in err_str or 'duplicate' in err_str or 'unique' in err_str:
+            return jsonify({"status": "error", "message": "An account with this email already exists."}), 409
+        if any(sig in err_str for sig in ("can't connect to mysql", "name or service not known", "2003", "operationalerror", "connection refused")):
+            return jsonify({
+                "status": "error",
+                "message": "Database service is temporarily unavailable. Please verify cloud database status.",
+                "detail": str(e)
+            }), 503
+        return jsonify({
+            "status": "error",
+            "message": "Failed to create account due to a database error.",
+            "detail": str(e)
+        }), 500
 
-    user_record = query_one("""
-        SELECT user_id, full_name, email, phone, role, preferred_language, account_status, created_at 
-        FROM users WHERE user_id = %s;
-    """, (user_id,))
+    try:
+        user_record = query_one("""
+            SELECT user_id, full_name, email, phone, role, preferred_language, account_status, created_at 
+            FROM users WHERE user_id = %s;
+        """, (user_id,))
+    except Exception:
+        user_record = {
+            "user_id": user_id,
+            "full_name": full_name,
+            "email": email,
+            "phone": phone,
+            "role": "user",
+            "preferred_language": preferred_language,
+            "account_status": "active"
+        }
 
     token = generate_token(user_id, email, 'user')
     session['user_id'] = user_id
@@ -132,10 +174,20 @@ def login():
     if not email or not password:
         return jsonify({"status": "error", "message": "Email and password are required."}), 400
 
-    user = query_one("""
-        SELECT user_id, full_name, email, password_hash, phone, role, preferred_language, account_status, created_at 
-        FROM users WHERE email = %s;
-    """, (email,))
+    try:
+        user = query_one("""
+            SELECT user_id, full_name, email, password_hash, phone, role, preferred_language, account_status, created_at 
+            FROM users WHERE email = %s;
+        """, (email,))
+    except Exception as e:
+        err_str = str(e).lower()
+        if any(sig in err_str for sig in ("can't connect to mysql", "name or service not known", "2003", "operationalerror", "connection refused")):
+            return jsonify({
+                "status": "error",
+                "message": "Database service is temporarily unavailable. Please verify cloud database status.",
+                "detail": str(e)
+            }), 503
+        raise
     
     if not user or not check_password_hash(user['password_hash'], password):
         return jsonify({"status": "error", "message": "Invalid email or password."}), 401

@@ -32,6 +32,9 @@ class Config:
                 DB_PASSWORD = urllib.parse.unquote(_parsed.password)
             if _parsed.path and len(_parsed.path) > 1:
                 DB_NAME = _parsed.path.lstrip('/')
+            # Auto-enable SSL for cloud databases or if requested in query parameters
+            if "ssl" in _db_url.lower() or any(k in (_parsed.hostname or '').lower() for k in ("aivencloud", "tidb", "planetscale", "aws", "rds", "railway")):
+                DB_SSL = True
         except Exception as _e:
             print(f"Notice: Failed to parse DATABASE_URL: {_e}")
     
