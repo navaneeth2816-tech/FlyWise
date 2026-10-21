@@ -18,11 +18,22 @@ let isBookingSubmitting = false;
 /**
  * Initializes the booking flow for the selected itinerary.
  */
-async function startBookingFlow(itineraryId) {
-  const it = currentSearchResults.find(item => item.itinerary_id === itineraryId);
+async function startBookingFlow(itineraryId, triggerBtn = null) {
+  let it = (typeof currentSearchResults !== 'undefined' ? currentSearchResults : []).find(item => item.itinerary_id === itineraryId);
+  if (!it && typeof window !== 'undefined' && window.currentSearchResults) {
+    it = window.currentSearchResults.find(item => item.itinerary_id === itineraryId);
+  }
   if (!it) {
-    showToast('Itinerary details not found.', 'danger');
+    showToast('Itinerary details not found. Please refresh search results.', 'danger');
     return;
+  }
+
+  // Provide immediate button feedback if button element was passed
+  let originalBtnHtml = '';
+  if (triggerBtn) {
+    originalBtnHtml = triggerBtn.innerHTML;
+    triggerBtn.disabled = true;
+    triggerBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Selecting...';
   }
   
   // Reset booking wizard state
@@ -36,23 +47,50 @@ async function startBookingFlow(itineraryId) {
   selectedPaymentMode = 'card';
   isBookingSubmitting = false;
 
+  // Persist selected flight in session so user doesn't lose progress if they log in
+  try {
+    sessionStorage.setItem('flywise_pending_booking', itineraryId);
+  } catch (e) {}
+
   const modal = document.getElementById('booking-modal');
   const body = document.getElementById('booking-modal-body');
   if (!modal || !body) return;
 
-  const firstFlightId = it.segments[0].flight_id;
+  // Display immediate loading state inside modal for perceived responsiveness
+  body.innerHTML = `
+    <div style="text-align: center; padding: 3.5rem 1rem;">
+      <i class="fa-solid fa-plane-departure fa-spin" style="font-size: 2.4rem; color: var(--primary); margin-bottom: 1rem;"></i>
+      <h3 style="font-weight: 800; color: #1e3a8a; margin-bottom: 0.5rem;">Preparing Flight Reservation...</h3>
+      <p style="color: var(--text-muted); font-size: 0.9rem;">
+        Loading live seat map for <strong>${it.airline_name} (${it.segments[0].flight_number})</strong> • ${it.origin_code} → ${it.destination_code}
+      </p>
+    </div>
+  `;
+  openModal('booking-modal');
+
+  const firstFlightId = it.segments && it.segments[0] ? it.segments[0].flight_id : null;
   
   // Load seats for this flight from MySQL
   try {
-    const seatData = await api.get(`/flights/${firstFlightId}/seats`);
-    currentFlightSeats = seatData.seats || [];
+    if (firstFlightId) {
+      const seatData = await api.get(`/flights/${firstFlightId}/seats`);
+      currentFlightSeats = seatData.seats || [];
+    } else {
+      currentFlightSeats = [];
+    }
   } catch (err) {
+    console.warn('Seat map loading notice:', err);
     currentFlightSeats = [];
+  } finally {
+    if (triggerBtn) {
+      triggerBtn.disabled = false;
+      triggerBtn.innerHTML = originalBtnHtml;
+    }
   }
 
   renderBookingWizard();
-  openModal('booking-modal');
 }
+window.startBookingFlow = startBookingFlow;
 
 /**
  * Main dispatcher to render the appropriate wizard step.
@@ -636,10 +674,6 @@ async function verifyBookingOtp() {
     isOtpVerifying = false;
     if (verifyBtn) {
       verifyBtn.disabled = false;
-      verifyBtn.innerHTML = '<i class="fa-solid fa-shield-check"></i> Verify OTP & Continue';
-    }
-  }
-}
       verifyBtn.innerHTML = '<i class="fa-solid fa-shield-check"></i> Verify OTP & Continue';
     }
   }

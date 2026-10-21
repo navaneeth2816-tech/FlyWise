@@ -202,6 +202,9 @@ async function performFlightSearch(e) {
     });
 
     currentSearchResults = data.itineraries || [];
+    if (typeof window !== 'undefined') {
+      window.currentSearchResults = currentSearchResults;
+    }
     renderSearchResults(currentSearchResults, {
       origin,
       destination,
@@ -389,7 +392,7 @@ function renderSearchResults(itineraries, searchMeta = {}) {
               <label style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted); display: flex; align-items: center; gap: 4px; cursor: pointer;">
                 <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleCompare('${it.itinerary_id}')"> Compare
               </label>
-              <button class="btn-select-flight" onclick="startBookingFlow('${it.itinerary_id}')">
+              <button class="btn-select-flight" onclick="startBookingFlow('${it.itinerary_id}', this)">
                 Select Flight
               </button>
             </div>
@@ -542,7 +545,7 @@ async function showComparisonModal() {
             <div style="font-size: 1.1rem; font-weight: 800; color: #059669;">${it.recommendation_score} / 100</div>
           </div>
 
-          <button class="btn-select-flight" style="width: 100%;" onclick="closeModal('comparison-modal'); startBookingFlow('${it.itinerary_id}')">
+          <button class="btn-select-flight" style="width: 100%;" onclick="closeModal('comparison-modal'); startBookingFlow('${it.itinerary_id}', this)">
             Select This Flight
           </button>
         </div>

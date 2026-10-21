@@ -277,6 +277,15 @@ async function handleLogin(e) {
     updateAuthUI();
     closeModal('auth-modal');
     showToast(`Welcome back, ${data.user.full_name}!`, 'success');
+
+    // If user was in the middle of booking a flight, resume booking flow
+    const pendingBookingId = sessionStorage.getItem('flywise_pending_booking') || 
+      (typeof activeBookingItinerary !== 'undefined' && activeBookingItinerary ? activeBookingItinerary.itinerary_id : null);
+    if (pendingBookingId && typeof startBookingFlow === 'function') {
+      sessionStorage.removeItem('flywise_pending_booking');
+      startBookingFlow(pendingBookingId);
+      return;
+    }
     switchView('journeys-view');
   } catch (err) {
     showToast(err.message || 'Login failed', 'danger');
@@ -349,6 +358,15 @@ async function handleRegister(e) {
     updateAuthUI();
     closeModal('auth-modal');
     showToast(`Welcome to FlyWise, ${name}! Your account is ready.`, 'success');
+
+    // If user was in the middle of booking a flight, resume booking flow
+    const pendingBookingId = sessionStorage.getItem('flywise_pending_booking') || 
+      (typeof activeBookingItinerary !== 'undefined' && activeBookingItinerary ? activeBookingItinerary.itinerary_id : null);
+    if (pendingBookingId && typeof startBookingFlow === 'function') {
+      sessionStorage.removeItem('flywise_pending_booking');
+      startBookingFlow(pendingBookingId);
+      return;
+    }
     switchView('journeys-view');
   } catch (err) {
     showToast(err.message || 'Registration failed', 'danger');
