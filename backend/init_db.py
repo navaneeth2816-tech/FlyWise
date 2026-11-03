@@ -1,67 +1,88 @@
 import os
 import sys
-import pymysql
 
 # Add backend directory to sys.path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from config import Config
 
-def init_database():
+HAVE_MYSQL_CONNECTOR = False
+try:
+    import mysql.connector
+    HAVE_MYSQL_CONNECTOR = True
+except ImportError:
+    pass
+
+try:
+    import pymysql
+except ImportError:
+    pass
+
+def _get_raw_init_connection(include_db=True):
     host = Config.DB_HOST
     port = Config.DB_PORT
     user = Config.DB_USER
     password = Config.DB_PASSWORD
     dbname = Config.DB_NAME
 
-    print(f"Connecting to MySQL server at {host}:{port} as {user} (database: '{dbname}')...")
-
-    conn = None
-    # 1. First attempt: connect directly with database name (standard on cloud providers)
-    try:
-        connect_kwargs = {
+    if HAVE_MYSQL_CONNECTOR:
+        kwargs = {
             'host': host,
             'port': port,
             'user': user,
             'password': password,
-            'database': dbname,
+            'charset': 'utf8mb4',
+            'autocommit': True,
+            'connection_timeout': 10
+        }
+        if include_db:
+            kwargs['database'] = dbname
+        if Config.DB_SSL:
+            kwargs['ssl_disabled'] = False
+        else:
+            kwargs['ssl_disabled'] = True
+        return mysql.connector.connect(**kwargs)
+    else:
+        kwargs = {
+            'host': host,
+            'port': port,
+            'user': user,
+            'password': password,
             'charset': 'utf8mb4',
             'autocommit': True,
             'connect_timeout': 10
         }
+        if include_db:
+            kwargs['database'] = dbname
         if Config.DB_SSL:
             try:
                 import ssl
                 ctx = ssl.create_default_context()
                 ctx.check_hostname = False
                 ctx.verify_mode = ssl.CERT_NONE
-                connect_kwargs['ssl'] = ctx
+                kwargs['ssl'] = ctx
             except Exception:
-                connect_kwargs['ssl'] = {'ssl_mode': 'REQUIRED'}
-        conn = pymysql.connect(**connect_kwargs)
+                kwargs['ssl'] = {'ssl_mode': 'REQUIRED'}
+        return pymysql.connect(**kwargs)
+
+def init_database():
+    host = Config.DB_HOST
+    port = Config.DB_PORT
+    user = Config.DB_USER
+    dbname = Config.DB_NAME
+
+    driver_name = "MySQL Connector/Python" if HAVE_MYSQL_CONNECTOR else "PyMySQL"
+    print(f"Connecting via {driver_name} to MySQL server at {host}:{port} as {user} (database: '{dbname}')...")
+
+    conn = None
+    # 1. First attempt: connect directly with database name
+    try:
+        conn = _get_raw_init_connection(include_db=True)
         print(f"Connected directly to database '{dbname}'.")
     except Exception as direct_err:
         print(f"Notice: Direct connection to '{dbname}' failed ({direct_err}). Trying without database name...")
         # 2. Second attempt: connect without database and CREATE DATABASE IF NOT EXISTS
         try:
-            connect_kwargs = {
-                'host': host,
-                'port': port,
-                'user': user,
-                'password': password,
-                'charset': 'utf8mb4',
-                'autocommit': True,
-                'connect_timeout': 10
-            }
-            if Config.DB_SSL:
-                try:
-                    import ssl
-                    ctx = ssl.create_default_context()
-                    ctx.check_hostname = False
-                    ctx.verify_mode = ssl.CERT_NONE
-                    connect_kwargs['ssl'] = ctx
-                except Exception:
-                    connect_kwargs['ssl'] = {'ssl_mode': 'REQUIRED'}
-            conn = pymysql.connect(**connect_kwargs)
+            conn = _get_raw_init_connection(include_db=False)
             with conn.cursor() as cur:
                 cur.execute(f"CREATE DATABASE IF NOT EXISTS `{dbname}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;")
                 cur.execute(f"USE `{dbname}`;")
@@ -98,7 +119,6 @@ def init_database():
     for sec in sections[1:]:
         sub_parts = sec.split("DELIMITER ;")
         proc_block = sub_parts[0]
-        # Inside proc_block, routines end with //
         routines = [r.strip() for r in proc_block.split("//") if r.strip()]
         for r in routines:
             if r.startswith("--") or r.startswith("/*"):
@@ -111,7 +131,6 @@ def init_database():
             except Exception as e:
                 print(f"Notice executing routine: {e}\nRoutine snippet: {r[:100]}")
 
-        # The remainder after DELIMITER ; is standard SQL
         if len(sub_parts) > 1:
             rest = sub_parts[1]
             rest_stmts = [s.strip() for s in rest.split(";") if s.strip()]
@@ -128,12 +147,12 @@ def init_database():
 
     cursor.execute("SHOW TABLES;")
     tables = [row[0] for row in cursor.fetchall()]
-    print(f"\n[OK] Database initialized successfully! Total tables created: {len(tables)}")
+    print(f"\n[OK] Database verified! Total tables: {len(tables)}")
     print("Tables:", ", ".join(tables))
 
     cursor.execute("SHOW FULL TABLES WHERE Table_type = 'VIEW';")
     views = [row[0] for row in cursor.fetchall()]
-    print(f"[OK] Total Views created: {len(views)}")
+    print(f"[OK] Total Views: {len(views)}")
     print("Views:", ", ".join(views))
 
     conn.close()

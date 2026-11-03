@@ -1,11 +1,28 @@
+import os
 import queue
 import threading
-import pymysql
-import pymysql.cursors
 from contextlib import contextmanager
 from decimal import Decimal
 from datetime import datetime, date, timedelta
 from config import Config
+
+# Primary MySQL Driver: MySQL Connector/Python
+# Fallback Driver: PyMySQL
+HAVE_MYSQL_CONNECTOR = False
+HAVE_PYMYSQL = False
+
+try:
+    import mysql.connector
+    HAVE_MYSQL_CONNECTOR = True
+except ImportError:
+    pass
+
+try:
+    import pymysql
+    import pymysql.cursors
+    HAVE_PYMYSQL = True
+except ImportError:
+    pass
 
 def clean_row(row):
     """Recursively converts Decimals, datetimes, dates to JSON serializable formats."""
@@ -29,32 +46,77 @@ def clean_row(row):
         return new_dict
     return row
 
+def _wrap_mysql_connector_conn(conn):
+    """Wraps mysql.connector connection for unified API compatibility without breaking internal callers."""
+    if not hasattr(conn, 'open'):
+        type(conn).open = property(lambda self: self.is_connected())
+    if not hasattr(conn, 'begin'):
+        type(conn).begin = lambda self: self.start_transaction()
+    return conn
+
 def _create_raw_connection():
-    """Creates a raw MySQL connection."""
-    kwargs = {
-        'host': Config.DB_HOST,
-        'port': Config.DB_PORT,
-        'user': Config.DB_USER,
-        'password': Config.DB_PASSWORD,
-        'database': Config.DB_NAME,
-        'charset': 'utf8mb4',
-        'cursorclass': pymysql.cursors.DictCursor,
-        'autocommit': False,
-        'connect_timeout': 8
-    }
-    if Config.DB_SSL:
-        try:
-            import ssl
-            ctx = ssl.create_default_context()
-            ctx.check_hostname = False
-            ctx.verify_mode = ssl.CERT_NONE
-            kwargs['ssl'] = ctx
-        except Exception as _ssle:
-            kwargs['ssl'] = {'ssl_mode': 'REQUIRED'}
-    return pymysql.connect(**kwargs)
+    """Creates a raw MySQL connection using MySQL Connector/Python or PyMySQL."""
+    if HAVE_MYSQL_CONNECTOR:
+        kwargs = {
+            'host': Config.DB_HOST,
+            'port': Config.DB_PORT,
+            'user': Config.DB_USER,
+            'password': Config.DB_PASSWORD,
+            'database': Config.DB_NAME,
+            'charset': 'utf8mb4',
+            'autocommit': False,
+            'connection_timeout': 10
+        }
+        if Config.DB_SSL:
+            kwargs['ssl_disabled'] = False
+        else:
+            kwargs['ssl_disabled'] = True
+        conn = mysql.connector.connect(**kwargs)
+        return _wrap_mysql_connector_conn(conn)
+    elif HAVE_PYMYSQL:
+        kwargs = {
+            'host': Config.DB_HOST,
+            'port': Config.DB_PORT,
+            'user': Config.DB_USER,
+            'password': Config.DB_PASSWORD,
+            'database': Config.DB_NAME,
+            'charset': 'utf8mb4',
+            'cursorclass': pymysql.cursors.DictCursor,
+            'autocommit': False,
+            'connect_timeout': 10
+        }
+        if Config.DB_SSL:
+            try:
+                import ssl
+                ctx = ssl.create_default_context()
+                ctx.check_hostname = False
+                ctx.verify_mode = ssl.CERT_NONE
+                kwargs['ssl'] = ctx
+            except Exception:
+                kwargs['ssl'] = {'ssl_mode': 'REQUIRED'}
+        return pymysql.connect(**kwargs)
+    else:
+        raise RuntimeError("No MySQL driver installed. Please run: pip install mysql-connector-python")
+
+def _is_connection_alive(conn):
+    """Checks whether the connection is currently open and healthy."""
+    if not conn:
+        return False
+    try:
+        if hasattr(conn, 'is_connected'):
+            if not conn.is_connected():
+                return False
+        elif hasattr(conn, 'open'):
+            if not conn.open:
+                return False
+        if hasattr(conn, 'ping'):
+            conn.ping(reconnect=True)
+        return True
+    except Exception:
+        return False
 
 class MySQLConnectionPool:
-    """Thread-safe connection pool for reusing database connections."""
+    """Thread-safe connection pool for reusing MySQL connections."""
     def __init__(self, maxsize=15):
         self.pool = queue.Queue(maxsize=maxsize)
         self.maxsize = maxsize
@@ -65,15 +127,13 @@ class MySQLConnectionPool:
         while not self.pool.empty():
             try:
                 conn = self.pool.get_nowait()
-                if conn and conn.open:
+                if _is_connection_alive(conn):
+                    return conn
+                else:
                     try:
-                        conn.ping()
-                        return conn
+                        conn.close()
                     except Exception:
-                        try:
-                            conn.close()
-                        except Exception:
-                            pass
+                        pass
             except queue.Empty:
                 break
         return _create_raw_connection()
@@ -83,7 +143,7 @@ class MySQLConnectionPool:
         if not conn:
             return
         try:
-            if conn.open:
+            if _is_connection_alive(conn):
                 try:
                     conn.rollback()
                 except Exception:
@@ -116,8 +176,17 @@ def get_db_cursor(commit=False):
     """Context manager for single operations or auto-commit queries using connection pooling."""
     conn = _db_pool.acquire()
     try:
-        with conn.cursor() as cursor:
+        if HAVE_MYSQL_CONNECTOR and isinstance(conn, (mysql.connector.pooling.PooledMySQLConnection, mysql.connector.MySQLConnection)):
+            cursor = conn.cursor(dictionary=True, buffered=True)
+        else:
+            cursor = conn.cursor()
+        try:
             yield cursor
+        finally:
+            try:
+                cursor.close()
+            except Exception:
+                pass
         if commit:
             conn.commit()
     except Exception:
@@ -133,7 +202,7 @@ def get_db_cursor(commit=False):
 def transaction():
     """
     ACID Transaction context manager:
-    Begins transaction, yields (conn, cursor).
+    Begins transaction, yields dictionary cursor.
     On successful block exit, commits changes.
     On exception, rolls back immediately.
     Releases connection back to the pool.
@@ -141,8 +210,17 @@ def transaction():
     conn = _db_pool.acquire()
     try:
         conn.begin()
-        with conn.cursor() as cursor:
+        if HAVE_MYSQL_CONNECTOR and isinstance(conn, (mysql.connector.pooling.PooledMySQLConnection, mysql.connector.MySQLConnection)):
+            cursor = conn.cursor(dictionary=True, buffered=True)
+        else:
+            cursor = conn.cursor()
+        try:
             yield cursor
+        finally:
+            try:
+                cursor.close()
+            except Exception:
+                pass
         conn.commit()
     except Exception:
         try:

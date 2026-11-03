@@ -3,40 +3,20 @@ import sys
 import json
 import random
 from datetime import datetime, timedelta
-import pymysql
 from werkzeug.security import generate_password_hash
 
 # Add backend directory to sys.path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from config import Config
-
-def get_connection():
-    kwargs = {
-        'host': Config.DB_HOST,
-        'port': Config.DB_PORT,
-        'user': Config.DB_USER,
-        'password': Config.DB_PASSWORD,
-        'database': Config.DB_NAME,
-        'charset': 'utf8mb4',
-        'cursorclass': pymysql.cursors.DictCursor,
-        'autocommit': False,
-        'connect_timeout': 10
-    }
-    if Config.DB_SSL:
-        try:
-            import ssl
-            ctx = ssl.create_default_context()
-            ctx.check_hostname = False
-            ctx.verify_mode = ssl.CERT_NONE
-            kwargs['ssl'] = ctx
-        except Exception:
-            kwargs['ssl'] = {'ssl_mode': 'REQUIRED'}
-    return pymysql.connect(**kwargs)
+from database import get_connection
 
 def seed():
     print("Starting comprehensive database seeding for FlyWise AI...")
     conn = get_connection()
-    cur = conn.cursor()
+    try:
+        cur = conn.cursor(dictionary=True, buffered=True)
+    except TypeError:
+        cur = conn.cursor()
 
     try:
         # 1. Clean existing seed data

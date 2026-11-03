@@ -23,8 +23,7 @@ class Config:
     DB_NAME = os.getenv("DB_NAME", "flywise_db")
     DB_SSL = os.getenv("DB_SSL", "").lower() in ("true", "1", "required")
 
-    # Cloud Database URL parser (Render / Railway / TiDB / PlanetScale / Aiven / AWS RDS)
-    # When deployed to cloud (e.g. Render), DATABASE_URL environment variable is provided
+    # Cloud / Local Database URL parser (Render / Railway / TiDB / PlanetScale / Local MySQL)
     _db_url = os.getenv("DATABASE_URL") or os.getenv("MYSQL_URL") or os.getenv("JAWSDB_URL")
     if _db_url and ("mysql" in _db_url.lower() or "mariadb" in _db_url.lower()):
         try:
@@ -45,7 +44,9 @@ class Config:
             if _parsed.path and len(_parsed.path) > 1:
                 DB_NAME = _parsed.path.lstrip('/').split('?')[0]
             # Auto-enable SSL for cloud databases or if requested in query parameters
-            if "ssl" in _db_url.lower() or any(k in (_parsed.hostname or '').lower() for k in ("aivencloud", "tidb", "planetscale", "aws", "rds", "railway", "cleardb")):
+            if _parsed.hostname in ("localhost", "127.0.0.1"):
+                DB_SSL = os.getenv("DB_SSL", "").lower() in ("true", "1", "required")
+            elif "ssl" in _db_url.lower() or any(k in (_parsed.hostname or '').lower() for k in ("aivencloud", "tidb", "planetscale", "aws", "rds", "railway", "cleardb")):
                 DB_SSL = True
         except Exception as _e:
             print(f"Notice: Failed to parse DATABASE_URL: {_e}")

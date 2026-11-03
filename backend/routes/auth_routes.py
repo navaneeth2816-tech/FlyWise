@@ -82,7 +82,7 @@ def validate_password_strength(password):
 @auth_bp.route('/register', methods=['POST'])
 def register():
     data = request.get_json() or {}
-    full_name = data.get('full_name', '').strip()
+    full_name = (data.get('full_name') or data.get('name') or '').strip()
     email = data.get('email', '').strip().lower()
     password = data.get('password', '')
     confirm_password = data.get('confirm_password', '')
