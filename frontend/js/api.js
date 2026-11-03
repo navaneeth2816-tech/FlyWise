@@ -5,11 +5,16 @@
 const isLocal = typeof window !== 'undefined' && 
   (window.location.hostname === 'localhost' || 
    window.location.hostname === '127.0.0.1' || 
-   window.location.hostname === '');
+   window.location.hostname === '' ||
+   window.location.protocol === 'file:');
 
-const API_BASE = isLocal 
-  ? '/api/v1' 
-  : 'https://flywise-0equ.onrender.com/api/v1';
+// Support custom API override if stored in localStorage or URL parameter
+const customApiOverride = (typeof window !== 'undefined' && window.localStorage && localStorage.getItem('flywise_api_url')) ||
+  (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('api_url'));
+
+const API_BASE = customApiOverride || (isLocal 
+  ? (window.location.port === '5000' ? '/api/v1' : 'http://localhost:5000/api/v1') 
+  : 'https://flywise-0equ.onrender.com/api/v1');
 
 // Background warm-up ping for Render to eliminate cold-start lag before user actions
 if (typeof window !== 'undefined') {
