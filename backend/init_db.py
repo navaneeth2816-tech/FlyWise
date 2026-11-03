@@ -29,7 +29,14 @@ def init_database():
             'connect_timeout': 10
         }
         if Config.DB_SSL:
-            connect_kwargs['ssl'] = {'ssl_mode': 'REQUIRED'}
+            try:
+                import ssl
+                ctx = ssl.create_default_context()
+                ctx.check_hostname = False
+                ctx.verify_mode = ssl.CERT_NONE
+                connect_kwargs['ssl'] = ctx
+            except Exception:
+                connect_kwargs['ssl'] = {'ssl_mode': 'REQUIRED'}
         conn = pymysql.connect(**connect_kwargs)
         print(f"Connected directly to database '{dbname}'.")
     except Exception as direct_err:
@@ -46,7 +53,14 @@ def init_database():
                 'connect_timeout': 10
             }
             if Config.DB_SSL:
-                connect_kwargs['ssl'] = {'ssl_mode': 'REQUIRED'}
+                try:
+                    import ssl
+                    ctx = ssl.create_default_context()
+                    ctx.check_hostname = False
+                    ctx.verify_mode = ssl.CERT_NONE
+                    connect_kwargs['ssl'] = ctx
+                except Exception:
+                    connect_kwargs['ssl'] = {'ssl_mode': 'REQUIRED'}
             conn = pymysql.connect(**connect_kwargs)
             with conn.cursor() as cur:
                 cur.execute(f"CREATE DATABASE IF NOT EXISTS `{dbname}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;")

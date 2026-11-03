@@ -43,7 +43,14 @@ def _create_raw_connection():
         'connect_timeout': 8
     }
     if Config.DB_SSL:
-        kwargs['ssl'] = {'ssl_mode': 'REQUIRED'}
+        try:
+            import ssl
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            kwargs['ssl'] = ctx
+        except Exception as _ssle:
+            kwargs['ssl'] = {'ssl_mode': 'REQUIRED'}
     return pymysql.connect(**kwargs)
 
 class MySQLConnectionPool:

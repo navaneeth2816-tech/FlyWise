@@ -146,19 +146,27 @@ def create_app():
             "detail": err_detail
         }), 500
 
-    # Auto-initialize database tables if missing on startup
+    # Auto-initialize database tables and data if missing on startup
     try:
         tables = query_all("SHOW TABLES;")
         table_names = [list(r.values())[0].lower() for r in tables] if tables else []
-        if 'users' not in table_names or 'flights' not in table_names or 'airports' not in table_names:
-            print("Notice: Missing core database tables on startup. Initializing schema and seed data...")
+        flight_count = 0
+        if 'flights' in table_names:
+            try:
+                fc = query_one("SELECT COUNT(*) AS c FROM flights;")
+                flight_count = fc['c'] if fc else 0
+            except Exception:
+                flight_count = 0
+
+        if 'users' not in table_names or 'flights' not in table_names or 'airports' not in table_names or flight_count == 0:
+            print("Notice: Missing core database tables or flight data on startup. Initializing schema and seed data...")
             import init_db
             init_db.init_database()
             import seed_data
             seed_data.seed()
             print("Database initialized and seeded successfully on startup.")
         else:
-            print(f"Database connected: {len(table_names)} tables verified.")
+            print(f"Database connected: {len(table_names)} tables verified, {flight_count} flights ready.")
     except Exception as e:
         print(f"Startup database check notice: {e}")
 
