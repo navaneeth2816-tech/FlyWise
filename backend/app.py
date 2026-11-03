@@ -47,31 +47,52 @@ def create_app():
     app.register_blueprint(group_bp)
     app.register_blueprint(admin_bp)
 
-    # Health Check Endpoint
+    # Health Check Endpoints (supports /health, /api/health, and /api/v1/health)
+    @app.route('/health', methods=['GET'])
+    @app.route('/api/health', methods=['GET'])
     @app.route('/api/v1/health', methods=['GET'])
     def health_check():
         db_ok = True
         tables = []
         db_err = None
+        ping_ok = False
+        flight_count = 0
         try:
+            # 1. Verify MySQL connectivity using SELECT 1
+            ping_row = query_one("SELECT 1 AS ping;")
+            ping_ok = bool(ping_row and ping_row.get('ping') == 1)
+
+            # 2. Verify required tables
             res = query_all("SHOW TABLES;")
             tables = [list(r.values())[0] for r in res] if res else []
+
+            # 3. Check flights count
+            if 'flights' in tables:
+                fc = query_one("SELECT COUNT(*) AS c FROM flights;")
+                flight_count = fc['c'] if fc else 0
         except Exception as e:
             db_ok = False
+            ping_ok = False
             db_err = str(e)
+
+        is_healthy = db_ok and ping_ok and len(tables) >= 20 and flight_count > 0
+
         return jsonify({
-            "status": "healthy" if db_ok and len(tables) > 0 else "degraded",
+            "status": "healthy" if is_healthy else "degraded",
             "service": "FlyWise AI Backend",
-            "database_connected": db_ok,
+            "database_connected": db_ok and ping_ok,
+            "mysql_ping": ping_ok,
+            "flight_count": flight_count,
             "table_count": len(tables),
             "tables": tables,
             "db_host": Config.DB_HOST,
             "db_name": Config.DB_NAME,
             "error": db_err,
-            "version": "2.0.0"
-        })
+            "version": "2.0.1"
+        }), 200
 
     # System Database Initialization & Diagnostic Endpoint
+    @app.route('/api/system/init-db', methods=['GET', 'POST'])
     @app.route('/api/v1/system/init-db', methods=['GET', 'POST'])
     def system_init_db():
         try:
